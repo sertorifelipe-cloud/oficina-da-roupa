@@ -355,7 +355,7 @@ export function RelatoriosPage() {
                           <tr><td colSpan={4} className="p-8 text-center text-gray-500">Nenhum pedido encontrado.</td></tr>
                         ) : (
                           orders.map(o => {
-                            const isLate = o.status !== 'entregue' && o.expected_date && isBefore(new Date(`${o.expected_date}T12:00:00`), today)
+
                             const st = statusConfig[o.status]
                             return (
                               <tr key={o.id} className={`border-b border-gray-100 transition-colors hover:bg-gray-50`}>

@@ -41,7 +41,7 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
   const [clientSearch, setClientSearch] = useState('')
   const [clientResults, setClientResults] = useState<Client[]>([])
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
-  const [isSearchingClient, setIsSearchingClient] = useState(false)
+
   const [showClientDropdown, setShowClientDropdown] = useState(false)
   
   const dropdownRef = useRef<HTMLDivElement>(null)
@@ -96,7 +96,6 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
     }
 
     const search = async () => {
-      setIsSearchingClient(true)
       const { data } = await supabase
         .from('clients')
         .select('*')
@@ -105,7 +104,6 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
       
       setClientResults(data || [])
       setShowClientDropdown(true)
-      setIsSearchingClient(false)
     }
 
     const debounce = setTimeout(search, 300)

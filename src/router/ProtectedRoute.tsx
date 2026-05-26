@@ -6,7 +6,7 @@ import { useAuth } from '@/contexts/AuthContext'
  * Se ainda carregando → mostra tela de espera simples
  */
 export function ProtectedRoute() {
-  const { user, profile, loading } = useAuth()
+  const { user, loading } = useAuth()
 
   if (loading) {
     return (
@@ -16,7 +16,7 @@ export function ProtectedRoute() {
     )
   }
 
-  if (!user || (profile && profile.is_active === false)) {
+  if (!user) {
     return <Navigate to="/login" replace />
   }
 
