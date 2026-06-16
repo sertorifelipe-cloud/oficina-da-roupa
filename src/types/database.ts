@@ -96,6 +96,7 @@ export interface InventoryItem {
   min_quantity: number
   current_quantity: number
   base_price: number // NOVO
+  cost_price: number
   notes: string | null
   created_at: string
 }

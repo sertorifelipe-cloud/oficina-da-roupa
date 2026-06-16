@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/Input'
 import { toast } from 'sonner'
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import type { Order, Sale, InventoryItem } from '@/types/database'
+import { useAuth } from '@/contexts/AuthContext'
 
 type Tab = 'entrega' | 'vendas' | 'estoque'
 
@@ -25,7 +26,10 @@ const paymentConfig = {
 }
 
 export function RelatoriosPage() {
+  const { profile } = useAuth()
+  const isAdmin = profile?.role === 'admin'
   const [activeTab, setActiveTab] = useState<Tab>('entrega')
+  const [inventoryMap, setInventoryMap] = useState<Record<string, number>>({})
   
   // Filtros Globais (Data)
   const [dateFrom, setDateFrom] = useState('')
@@ -83,6 +87,20 @@ export function RelatoriosPage() {
         
         if (error) throw error
         setSales(data || [])
+
+        // Carrega preços de custo se for admin para metrificar lucro
+        if (profile?.role === 'admin') {
+          const { data: itemsData } = await supabase
+            .from('inventory_items')
+            .select('id, cost_price')
+          if (itemsData) {
+            const map: Record<string, number> = {}
+            itemsData.forEach(item => {
+              map[item.id] = item.cost_price || 0
+            })
+            setInventoryMap(map)
+          }
+        }
       }
 
     } catch (error) {
@@ -164,6 +182,21 @@ export function RelatoriosPage() {
   const salesCount = sales.length
   const ticketMedio = salesCount > 0 ? salesTotal / salesCount : 0
 
+  // Custo total e Lucro (apenas admin)
+  let totalCost = 0
+  if (isAdmin) {
+    sales.forEach(sale => {
+      if (sale.items) {
+        sale.items.forEach((item: any) => {
+          const unitCost = inventoryMap[item.id] || 0
+          totalCost += unitCost * item.quantity
+        })
+      }
+    })
+  }
+  const estimatedProfit = salesTotal - totalCost
+  const profitMargin = salesTotal > 0 ? (estimatedProfit / salesTotal) * 100 : 0
+
   // Top 8 serviços
   const itemsMap: Record<string, number> = {}
   sales.forEach(sale => {
@@ -224,10 +257,14 @@ export function RelatoriosPage() {
   }
 
   const exportEstoque = () => {
-    let csv = 'Item;Categoria;Unidade;Estoque Mínimo;Estoque Atual;Status\n'
+    let csv = isAdmin
+      ? 'Item;Categoria;Unidade;Preço Venda;Preço Custo;Estoque Mínimo;Estoque Atual;Status\n'
+      : 'Item;Categoria;Unidade;Preço Venda;Estoque Mínimo;Estoque Atual;Status\n'
     inventory.forEach(i => {
       const status = i.current_quantity < i.min_quantity ? 'BAIXO' : 'OK'
-      csv += `"${i.name}";"${i.category || '-'}";"${i.unit}";"${i.min_quantity}";"${i.current_quantity}";"${status}"\n`
+      csv += isAdmin
+        ? `"${i.name}";"${i.category || '-'}";"${i.unit}";"${i.base_price}";"${i.cost_price || 0}";"${i.min_quantity}";"${i.current_quantity}";"${status}"\n`
+        : `"${i.name}";"${i.category || '-'}";"${i.unit}";"${i.base_price}";"${i.min_quantity}";"${i.current_quantity}";"${status}"\n`
     })
     downloadCSV(csv, 'relatorio_estoque.csv')
   }
@@ -417,7 +454,7 @@ export function RelatoriosPage() {
           {activeTab === 'vendas' && hasSearched && (
             <div className="space-y-6">
               {/* Resumo Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 xl:grid-cols-5 gap-6">
                 <div className="bg-purple-900 text-white p-6 rounded-2xl shadow-sm">
                   <p className="text-purple-200 text-[18px] font-medium mb-1">Faturamento Bruto</p>
                   <p className="text-[36px] font-black">{formatCurrency(salesTotal)}</p>
@@ -430,6 +467,19 @@ export function RelatoriosPage() {
                   <p className="text-gray-500 text-[18px] font-medium mb-1">Ticket Médio</p>
                   <p className="text-[36px] font-black text-gray-900">{formatCurrency(ticketMedio)}</p>
                 </div>
+                {isAdmin && (
+                  <>
+                    <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-200">
+                      <p className="text-gray-500 text-[18px] font-medium mb-1">Custo Total (CMV)</p>
+                      <p className="text-[36px] font-black text-red-600">{formatCurrency(totalCost)}</p>
+                    </div>
+                    <div className="bg-emerald-900 text-white p-6 rounded-2xl shadow-sm">
+                      <p className="text-emerald-200 text-[18px] font-medium mb-1">Lucro Estimado</p>
+                      <p className="text-[36px] font-black">{formatCurrency(estimatedProfit)}</p>
+                      <p className="text-sm text-emerald-300 mt-1">Margem de Lucro: {profitMargin.toFixed(1)}%</p>
+                    </div>
+                  </>
+                )}
               </div>
 
               {salesCount > 0 && (
@@ -546,10 +596,12 @@ export function RelatoriosPage() {
                   <table className="w-full text-left min-w-[800px]">
                     <thead className="bg-gray-50 border-b border-gray-200 text-gray-600 text-[15px]">
                       <tr>
-                        <th className="p-4 font-bold w-1/3">Item</th>
+                        <th className="p-4 font-bold w-1/4">Item</th>
+                        <th className="p-4 font-bold text-center">Preço Venda</th>
+                        {isAdmin && <th className="p-4 font-bold text-center">Preço Custo</th>}
                         <th className="p-4 font-bold text-center">Mínimo</th>
                         <th className="p-4 font-bold text-center">Atual</th>
-                        <th className="p-4 font-bold w-1/3">Status</th>
+                        <th className="p-4 font-bold w-1/4">Status</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -568,6 +620,10 @@ export function RelatoriosPage() {
                                 <p className="text-[18px] font-bold text-gray-900">{item.name}</p>
                                 {item.category && <p className="text-sm text-gray-500">{item.category}</p>}
                               </td>
+                              <td className="p-4 text-[18px] font-medium text-gray-900 text-center">{formatCurrency(item.base_price)}</td>
+                              {isAdmin && (
+                                <td className="p-4 text-[18px] font-medium text-amber-700 text-center">{formatCurrency(item.cost_price)}</td>
+                              )}
                               <td className="p-4 text-[18px] font-medium text-gray-600 text-center">{item.min_quantity} {item.unit}</td>
                               <td className={`p-4 text-[20px] font-black text-center ${isLow ? 'text-red-600' : 'text-gray-900'}`}>
                                 {item.current_quantity} {item.unit}

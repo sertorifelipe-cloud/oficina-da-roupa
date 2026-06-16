@@ -24,6 +24,7 @@ const itemSchema = z.object({
   min_quantity: z.number().min(0, 'A quantidade mínima não pode ser negativa.'),
   initial_quantity: z.number().min(0, 'A quantidade inicial não pode ser negativa.'),
   base_price: z.number().min(0, 'O preço não pode ser negativo.').optional(),
+  cost_price: z.number().min(0, 'O preço de custo não pode ser negativo.').optional(),
 })
 
 type ItemForm = z.infer<typeof itemSchema>
@@ -45,7 +46,8 @@ export function NewItemModal({ isOpen, onClose, onSuccess }: NewItemModalProps) 
       unit: 'un',
       min_quantity: 5,
       initial_quantity: 0,
-      base_price: 0
+      base_price: 0,
+      cost_price: 0
     }
   })
 
@@ -57,7 +59,8 @@ export function NewItemModal({ isOpen, onClose, onSuccess }: NewItemModalProps) 
         unit: 'un',
         min_quantity: 5,
         initial_quantity: 0,
-        base_price: 0
+        base_price: 0,
+        cost_price: 0
       })
     }
   }, [isOpen, reset])
@@ -73,7 +76,8 @@ export function NewItemModal({ isOpen, onClose, onSuccess }: NewItemModalProps) 
           unit: data.unit,
           min_quantity: data.min_quantity,
           current_quantity: 0, // Inicia zerado, a trigger vai atualizar via movimentação
-          base_price: data.base_price || 0
+          base_price: data.base_price || 0,
+          cost_price: data.cost_price || 0
         }])
         .select()
         .single()
@@ -210,6 +214,25 @@ export function NewItemModal({ isOpen, onClose, onSuccess }: NewItemModalProps) 
               />
             )}
           />
+
+          {profile?.role === 'admin' && (
+            <Controller
+              name="cost_price"
+              control={control}
+              render={({ field }) => (
+                <Input
+                  label="Preço de Custo (R$)"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="Ex: 20.00"
+                  {...field}
+                  onChange={(e) => field.onChange(parseFloat(e.target.value) || 0)}
+                  error={errors.cost_price?.message}
+                />
+              )}
+            />
+          )}
         </div>
 
         <div className="flex flex-col-reverse sm:flex-row items-center justify-end gap-4 pt-6 mt-2 border-t border-gray-100">
