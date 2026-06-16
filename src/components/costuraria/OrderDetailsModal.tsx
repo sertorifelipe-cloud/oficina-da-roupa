@@ -5,7 +5,7 @@ import { Modal } from '@/components/ui/Modal'
 import type { Order, OrderStatus } from '@/types/database'
 import { supabase } from '@/lib/supabaseClient'
 import { toast } from 'sonner'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 interface OrderDetailsModalProps {
   order: Order | null
@@ -23,6 +23,16 @@ const statusConfig = {
 
 export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDetailsModalProps) {
   const [isUpdating, setIsUpdating] = useState(false)
+  const [localAmountPaid, setLocalAmountPaid] = useState<number>(0)
+  const [showPaymentInput, setShowPaymentInput] = useState(false)
+  const [paymentValue, setPaymentValue] = useState<number | ''>('')
+  const [isSavingPayment, setIsSavingPayment] = useState(false)
+
+  useEffect(() => {
+    if (order) {
+      setLocalAmountPaid(order.amount_paid || 0)
+    }
+  }, [order])
 
   if (!order) return null
 
@@ -37,6 +47,58 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
   const formatCurrency = (value?: number | null) => {
     if (value === undefined || value === null) return 'R$ 0,00'
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
+  }
+
+  async function handleRegisterPartialPayment() {
+    if (paymentValue === '' || paymentValue <= 0) return
+    
+    setIsSavingPayment(true)
+    try {
+      const newAmountPaid = Number((localAmountPaid + Number(paymentValue)).toFixed(2))
+      
+      const { error } = await supabase
+        .from('orders')
+        .update({ amount_paid: newAmountPaid })
+        .eq('id', order!.id)
+        
+      if (error) throw error
+      
+      toast.success(`Pagamento parcial de R$ ${Number(paymentValue).toFixed(2)} registrado!`)
+      setLocalAmountPaid(newAmountPaid)
+      setShowPaymentInput(false)
+      setPaymentValue('')
+      onUpdate()
+    } catch (err) {
+      console.error('Erro ao registrar pagamento:', err)
+      toast.error('Erro ao registrar o pagamento.')
+    } finally {
+      setIsSavingPayment(false)
+    }
+  }
+
+  async function handleDeliverAndPayAll() {
+    setIsUpdating(true)
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ 
+          status: 'entregue',
+          amount_paid: order!.price,
+          delivery_date: new Date().toISOString().split('T')[0]
+        })
+        .eq('id', order!.id)
+
+      if (error) throw error
+
+      toast.success('Pagamento recebido e pedido entregue!')
+      onUpdate()
+      onClose()
+    } catch (err: any) {
+      console.error('Erro ao entregar pedido:', err)
+      toast.error('Erro ao registrar a entrega.')
+    } finally {
+      setIsUpdating(false)
+    }
   }
 
   async function handleStatusChange(newStatus: OrderStatus, confirmDelivery: boolean = false) {
@@ -89,10 +151,87 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
           </div>
           <div>
             <p className="text-gray-500 text-[16px] mb-1">Serviço</p>
-            <p className="text-[18px] font-bold text-gray-900">{order.service?.name ?? 'Não informado'}</p>
-            <p className="text-[18px] font-bold text-purple-900 mt-1">{formatCurrency(order.price)}</p>
+            <p className="text-[18px] font-bold text-gray-900 mb-2">{order.service?.name ?? 'Não informado'}</p>
+            <div className="space-y-1 text-sm border-t border-gray-200 pt-2">
+              <div className="flex justify-between">
+                <span className="text-gray-500 font-medium">Valor Total:</span>
+                <span className="font-bold text-gray-900">{formatCurrency(order.price)}</span>
+              </div>
+              <div className="flex justify-between text-emerald-700">
+                <span className="font-medium">Valor Pago:</span>
+                <span className="font-bold">{formatCurrency(localAmountPaid)}</span>
+              </div>
+              <div className="flex justify-between border-t border-dashed border-gray-200 pt-1 font-bold">
+                {order.price - localAmountPaid > 0 ? (
+                  <>
+                    <span className="text-amber-700">Saldo Restante:</span>
+                    <span className="text-amber-800">{formatCurrency(order.price - localAmountPaid)}</span>
+                  </>
+                ) : (
+                  <>
+                    <span className="text-emerald-700">Status Pagto:</span>
+                    <span className="text-emerald-800">Totalmente Pago ✓</span>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {order.status !== 'entregue' && order.price - localAmountPaid > 0 && (
+              <div className="mt-3">
+                {!showPaymentInput ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowPaymentInput(true)}
+                    className="text-[14px] font-bold text-purple-900 hover:text-purple-700 underline"
+                  >
+                    + Registrar Pagamento Parcial
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 mt-2">
+                    <input
+                      type="number"
+                      step="0.01"
+                      min="0.01"
+                      max={Number((order.price - localAmountPaid).toFixed(2))}
+                      placeholder="Valor pago..."
+                      value={paymentValue}
+                      onChange={(e) => setPaymentValue(e.target.value === '' ? '' : Number(e.target.value))}
+                      className="w-28 h-8 px-2 border border-gray-300 rounded-lg text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-purple-900 focus:border-transparent"
+                    />
+                    <button
+                      type="button"
+                      disabled={isSavingPayment || paymentValue === '' || paymentValue <= 0}
+                      onClick={handleRegisterPartialPayment}
+                      className="h-8 px-3 rounded-lg bg-purple-900 text-white text-xs font-bold hover:bg-purple-800 transition-colors disabled:opacity-50"
+                    >
+                      Salvar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setShowPaymentInput(false); setPaymentValue(''); }}
+                      className="text-xs font-medium text-gray-500 hover:text-gray-700"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
+
+        {/* Alerta de Pagamento Pendente */}
+        {order.status !== 'entregue' && order.price - localAmountPaid > 0 && (
+          <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl flex items-center gap-3">
+            <span className="text-[20px]">⚠️</span>
+            <div>
+              <p className="text-amber-800 text-base font-bold">Atenção: Pagamento Pendente</p>
+              <p className="text-amber-700 text-sm">
+                Resta receber o saldo de <strong>{formatCurrency(order.price - localAmountPaid)}</strong> antes de realizar a entrega do produto.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Datas e Status */}
         <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
@@ -165,14 +304,30 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
             )}
 
             {order.status === 'pronto' && (
-              <button
-                disabled={isUpdating}
-                onClick={() => handleStatusChange('entregue', true)}
-                className="w-full flex items-center justify-center gap-2 h-[60px] rounded-xl text-[20px] font-bold text-white bg-[#16a34a] hover:bg-[#15803d] transition-colors shadow-lg focus-ring"
-              >
-                <Check size={28} strokeWidth={3} />
-                Confirmar entrega
-              </button>
+              order.price - localAmountPaid > 0 ? (
+                <button
+                  disabled={isUpdating}
+                  onClick={() => handleDeliverAndPayAll()}
+                  className="w-full flex flex-col items-center justify-center h-[68px] rounded-xl text-white bg-amber-600 hover:bg-amber-700 transition-all shadow-lg focus-ring"
+                >
+                  <span className="flex items-center gap-2 text-[18px] font-bold">
+                    <Check size={24} strokeWidth={3} />
+                    Receber Restante e Entregar
+                  </span>
+                  <span className="text-xs opacity-90">
+                    Receber R$ {(order.price - localAmountPaid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} restante no ato da entrega
+                  </span>
+                </button>
+              ) : (
+                <button
+                  disabled={isUpdating}
+                  onClick={() => handleStatusChange('entregue', true)}
+                  className="w-full flex items-center justify-center gap-2 h-[60px] rounded-xl text-[20px] font-bold text-white bg-[#16a34a] hover:bg-[#15803d] transition-colors shadow-lg focus-ring"
+                >
+                  <Check size={28} strokeWidth={3} />
+                  Confirmar entrega (Totalmente Pago)
+                </button>
+              )
             )}
           </div>
         )}

@@ -54,6 +54,11 @@ export function OrderCard({ order, onViewDetails }: OrderCardProps) {
             <p className="text-[18px] font-bold text-purple-900">
               {formatCurrency(order.price)}
             </p>
+            {order.price - (order.amount_paid || 0) > 0 && order.status !== 'entregue' && (
+              <p className="text-xs text-amber-600 font-bold mt-1">
+                Falta: {formatCurrency(order.price - (order.amount_paid || 0))}
+              </p>
+            )}
           </div>
         </div>
 

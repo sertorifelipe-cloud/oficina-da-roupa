@@ -52,6 +52,7 @@ export interface Order {
   expected_date: string
   delivery_date?: string
   price: number
+  amount_paid: number
   notes?: string
   created_by: string
   created_at: string

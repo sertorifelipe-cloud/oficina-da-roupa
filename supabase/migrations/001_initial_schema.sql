@@ -46,6 +46,7 @@ create table if not exists orders (
   price numeric(10,2),
   notes text,
   created_by uuid references users_profiles(id),
+  amount_paid numeric(10,2) default 0.00,
   created_at timestamptz default now()
 );
 

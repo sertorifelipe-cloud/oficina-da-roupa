@@ -28,7 +28,14 @@ const orderSchema = z.object({
   client_id: z.string().min(1, 'Por favor, selecione um cliente.'),
   services_items: z.array(serviceItemSchema).min(1, 'Adicione pelo menos um serviço.'),
   expected_date: z.string().min(1, 'Informe a data de entrega prevista.'),
+  amount_paid: z.number().min(0, 'Valor de entrada inválido.'),
   notes: z.string().optional()
+}).refine(data => {
+  const total = data.services_items.reduce((acc, item) => acc + (item.price || 0), 0);
+  return (data.amount_paid || 0) <= total;
+}, {
+  message: 'O valor de entrada não pode ser maior que o valor total do pedido.',
+  path: ['amount_paid']
 })
 
 type OrderForm = z.infer<typeof orderSchema>
@@ -57,7 +64,8 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
   } = useForm<OrderForm>({
     resolver: zodResolver(orderSchema),
     defaultValues: {
-      services_items: [{ service_id: '', description: '', price: 0 }]
+      services_items: [{ service_id: '', description: '', price: 0 }],
+      amount_paid: 0
     }
   })
 
@@ -152,6 +160,7 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
           services_items: data.services_items,
           expected_date: data.expected_date,
           price: totalAmount,
+          amount_paid: data.amount_paid || 0,
           notes: data.notes || null,
           created_by: profile?.id,
           status: 'recebido'
@@ -320,6 +329,17 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
               labelClassName="text-white"
               className="bg-white/10 border-white/20 text-white placeholder:text-white/50 h-14"
               error={errors.expected_date?.message}
+            />
+            <Input
+              label="Valor de Entrada (Pago no Ato)"
+              type="number"
+              step="0.01"
+              min="0"
+              prefixNode={<span className="font-bold text-gray-500">R$</span>}
+              {...register('amount_paid', { valueAsNumber: true })}
+              labelClassName="text-white"
+              className="bg-white text-gray-900 h-14 font-medium"
+              error={errors.amount_paid?.message}
             />
           </div>
         </div>
