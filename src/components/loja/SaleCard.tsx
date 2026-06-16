@@ -33,11 +33,18 @@ export function SaleCard({ sale }: SaleCardProps) {
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow flex flex-col">
       <div className="p-5 flex-1">
-        {/* Topo: Data e Badge de Pagamento */}
+        {/* Topo: Data, Vendedor e Badge de Pagamento */}
         <div className="flex items-start justify-between mb-4">
-          <p className="text-[14px] text-gray-500 font-medium">
-            {formatDate(sale.sale_date)}
-          </p>
+          <div>
+            <p className="text-[14px] text-gray-500 font-medium">
+              {formatDate(sale.sale_date)}
+            </p>
+            {sale.users_profiles?.name && (
+              <p className="text-xs text-purple-700 font-semibold mt-0.5">
+                Vendedor: {sale.users_profiles.name}
+              </p>
+            )}
+          </div>
           {paymentInfo && PaymentIcon && (
             <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-sm font-bold ${paymentInfo.bg} ${paymentInfo.text}`}>
               <PaymentIcon size={16} />

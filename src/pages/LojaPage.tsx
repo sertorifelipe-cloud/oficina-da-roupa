@@ -36,7 +36,8 @@ export function LojaPage() {
         .from('sales')
         .select(`
           *,
-          client:clients(*)
+          client:clients(*),
+          users_profiles(name)
         `)
         .order('sale_date', { ascending: false })
 

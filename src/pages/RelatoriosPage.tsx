@@ -77,7 +77,7 @@ export function RelatoriosPage() {
       if (activeTab === 'vendas') {
         const { data, error } = await supabase
           .from('sales')
-          .select('*')
+          .select('*, client:clients(name), users_profiles(name)')
           .gte('sale_date', `${dateFrom}T00:00:00`)
           .lte('sale_date', `${dateTo}T23:59:59`)
         
@@ -186,6 +186,15 @@ export function RelatoriosPage() {
     paymentStats[method].total += sale.total || 0
   })
 
+  // Vendas por Vendedor
+  const sellerStats: Record<string, { qtd: number, total: number }> = {}
+  sales.forEach(sale => {
+    const seller = sale.users_profiles?.name || 'Não identificado'
+    if (!sellerStats[seller]) sellerStats[seller] = { qtd: 0, total: 0 }
+    sellerStats[seller].qtd += 1
+    sellerStats[seller].total += sale.total || 0
+  })
+
   // --- Exportações CSV ---
   const downloadCSV = (content: string, filename: string) => {
     const blob = new Blob(['\uFEFF' + content], { type: 'text/csv;charset=utf-8;' })
@@ -207,9 +216,9 @@ export function RelatoriosPage() {
   }
 
   const exportVendas = () => {
-    let csv = 'Data/Hora;Cliente;Método Pagamento;Subtotal;Desconto;Total;Itens (Qtd)\n'
+    let csv = 'Data/Hora;Cliente;Vendedor;Método Pagamento;Subtotal;Desconto;Total;Itens (Qtd)\n'
     sales.forEach(s => {
-      csv += `"${format(new Date(s.sale_date), 'dd/MM/yyyy HH:mm')}";"${s.client?.name || s.client_name_free || '-'}";"${paymentConfig[s.payment_method!] || '-'}";"${s.subtotal}";"${s.discount}";"${s.total}";"${s.items.length}"\n`
+      csv += `"${format(new Date(s.sale_date), 'dd/MM/yyyy HH:mm')}";"${s.client?.name || s.client_name_free || '-'}";"${s.users_profiles?.name || '-' }";"${paymentConfig[s.payment_method!] || '-'}";"${s.subtotal}";"${s.discount}";"${s.total}";"${s.items.length}"\n`
     })
     downloadCSV(csv, 'relatorio_vendas.csv')
   }
@@ -472,6 +481,39 @@ export function RelatoriosPage() {
                           return (
                             <tr key={method} className="border-b border-gray-100 last:border-0">
                               <td className="py-4 text-[18px] font-bold text-gray-800">{paymentConfig[method as keyof typeof paymentConfig] || method}</td>
+                              <td className="py-4 text-[18px] text-gray-600 text-center">{data.qtd}</td>
+                              <td className="py-4 text-[18px] font-bold text-gray-900 text-right">{formatCurrency(data.total || 0)}</td>
+                              <td className="py-4 text-[16px] text-gray-500 text-right">{percentage.toFixed(1)}%</td>
+                            </tr>
+                          )
+                        })}
+                        {salesCount === 0 && (
+                          <tr><td colSpan={4} className="py-8 text-center text-gray-500 text-lg">Nenhuma venda encontrada.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* Tabela Vendas por Vendedor */}
+                <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-[400px]">
+                  <h3 className="text-xl font-bold text-gray-900 p-6 border-b border-gray-100 bg-gray-50">Vendas por Vendedor</h3>
+                  <div className="flex-1 overflow-auto p-6">
+                    <table className="w-full text-left">
+                      <thead>
+                        <tr className="text-gray-500 border-b border-gray-200">
+                          <th className="pb-3 font-semibold text-[16px]">Vendedor</th>
+                          <th className="pb-3 font-semibold text-[16px] text-center">Qtd</th>
+                          <th className="pb-3 font-semibold text-[16px] text-right">Total</th>
+                          <th className="pb-3 font-semibold text-[16px] text-right">%</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {Object.entries(sellerStats).map(([seller, data]) => {
+                          const percentage = salesTotal > 0 ? (data.total / salesTotal) * 100 : 0
+                          return (
+                            <tr key={seller} className="border-b border-gray-100 last:border-0">
+                              <td className="py-4 text-[18px] font-bold text-gray-800">{seller}</td>
                               <td className="py-4 text-[18px] text-gray-600 text-center">{data.qtd}</td>
                               <td className="py-4 text-[18px] font-bold text-gray-900 text-right">{formatCurrency(data.total || 0)}</td>
                               <td className="py-4 text-[16px] text-gray-500 text-right">{percentage.toFixed(1)}%</td>

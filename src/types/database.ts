@@ -84,6 +84,7 @@ export interface Sale {
   created_by: string | null
   // relações opcionais
   client?: Client
+  users_profiles?: { name: string } | null
 }
 
 export interface InventoryItem {
