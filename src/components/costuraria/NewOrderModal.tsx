@@ -1,12 +1,12 @@
 import { useState, useEffect, useRef } from 'react'
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
 import { Loader2, Search, User, Plus, Trash2, Scissors } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
-import { Select } from '@/components/ui/Select'
+import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { supabase } from '@/lib/supabaseClient'
 import { toast } from 'sonner'
 import type { Client, Service } from '@/types/database'
@@ -239,15 +239,21 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
                   {/* Seleção do Serviço */}
                   <div className="md:col-span-4">
-                    <Select
-                      label="Serviço"
-                      options={services.map(s => ({ value: s.id, label: s.name }))}
-                      {...register(`services_items.${index}.service_id`)}
-                      onChange={(e) => {
-                        register(`services_items.${index}.service_id`).onChange(e);
-                        handleServiceChange(index, e.target.value);
-                      }}
-                      error={errors.services_items?.[index]?.service_id?.message}
+                    <Controller
+                      name={`services_items.${index}.service_id`}
+                      control={control}
+                      render={({ field }) => (
+                        <SearchableSelect
+                          label="Serviço"
+                          options={services.map(s => ({ value: s.id, label: s.name }))}
+                          value={field.value}
+                          onChange={(val) => {
+                            field.onChange(val)
+                            handleServiceChange(index, val)
+                          }}
+                          error={errors.services_items?.[index]?.service_id?.message}
+                        />
+                      )}
                     />
                   </div>
                   {/* Descrição Curta */}

@@ -3,7 +3,7 @@ import { Loader2, Search, User, Plus, Trash2, Banknote, Receipt, Wallet, CreditC
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
-import { Select } from '@/components/ui/Select'
+import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { supabase } from '@/lib/supabaseClient'
 import { toast } from 'sonner'
 import type { Client, InventoryItem, PaymentMethod } from '@/types/database'
@@ -303,10 +303,10 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
             <h3 className="text-xl font-bold text-purple-900 mb-4">Adicionar Item</h3>
             <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
               <div className="md:col-span-5">
-                <Select
+                <SearchableSelect
                   label="Produto (Estoque)"
                   value={currentItemId}
-                  onChange={e => setCurrentItemId(e.target.value)}
+                  onChange={val => setCurrentItemId(val)}
                   options={inventoryItems.map(i => ({ 
                     value: i.id, 
                     label: `${i.name} (${i.current_quantity} ${i.unit})` 
