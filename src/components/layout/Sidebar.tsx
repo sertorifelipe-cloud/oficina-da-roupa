@@ -49,6 +49,9 @@ export function Sidebar() {
 
   // Lógica de permissões por cargo
   const filteredNavItems = navItems.filter(item => {
+    // Relatórios são exclusivos de Admin
+    if (item.to === '/relatorios') return isAdmin
+
     if (isAdmin || role === 'operador') return true
     
     if (role === 'vendedor') {

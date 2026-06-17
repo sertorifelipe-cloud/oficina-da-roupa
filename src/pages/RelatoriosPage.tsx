@@ -28,6 +28,21 @@ const paymentConfig = {
 
 export function RelatoriosPage() {
   const { profile } = useAuth()
+  
+  if (profile?.role !== 'admin') {
+    return (
+      <div className="flex flex-col items-center justify-center py-20 px-4 text-center">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-16 h-16 text-red-500 mb-4">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M18.364 18.364A9 9 0 0 0 5.636 5.636m12.728 12.728A9 9 0 0 1 5.636 5.636m12.728 12.728L5.636 5.636" />
+        </svg>
+        <h1 className="text-2xl font-bold text-gray-900 mb-2">Acesso Restrito</h1>
+        <p className="text-gray-500 text-lg max-w-md">
+          Apenas administradores podem acessar a tela de relatórios. Se você precisa de acesso, fale com o administrador do sistema.
+        </p>
+      </div>
+    )
+  }
+
   const isAdmin = profile?.role === 'admin'
   const [activeTab, setActiveTab] = useState<Tab>('entrega')
   const [inventoryMap, setInventoryMap] = useState<Record<string, number>>({})

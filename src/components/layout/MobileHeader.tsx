@@ -43,6 +43,25 @@ export function MobileHeader() {
   const navigate = useNavigate()
 
   const isAdmin = profile?.role === 'admin'
+  const role = profile?.role || 'operador'
+
+  // Lógica de permissões por cargo (idêntica à Sidebar)
+  const filteredNavItems = navItems.filter(item => {
+    // Relatórios são exclusivos de Admin
+    if (item.to === '/relatorios') return isAdmin
+
+    if (isAdmin || role === 'operador') return true
+    
+    if (role === 'vendedor') {
+      return ['/dashboard', '/loja', '/clientes', '/estoque'].includes(item.to)
+    }
+    
+    if (role === 'costureiro') {
+      return ['/dashboard', '/costuraria', '/clientes'].includes(item.to)
+    }
+    
+    return false
+  })
 
   async function handleSignOut() {
     setIsOpen(false)
@@ -120,7 +139,7 @@ export function MobileHeader() {
 
         {/* Navegação */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
-          {navItems.map(({ to, icon: Icon, label }) => (
+          {filteredNavItems.map(({ to, icon: Icon, label }) => (
             <NavLink
               key={to}
               to={to}
