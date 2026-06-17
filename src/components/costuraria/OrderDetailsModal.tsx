@@ -1,11 +1,12 @@
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Check, ArrowRight, Package } from 'lucide-react'
+import { Check, ArrowRight, Package, Printer } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import type { Order, OrderStatus } from '@/types/database'
 import { supabase } from '@/lib/supabaseClient'
 import { toast } from 'sonner'
 import { useState, useEffect } from 'react'
+import { printOrderInvoice } from '@/lib/printHelper'
 
 interface OrderDetailsModalProps {
   order: Order | null
@@ -317,6 +318,18 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
             </div>
           </div>
         )}
+
+        {/* Ação de Impressão de Comanda */}
+        <div className="pt-4 border-t border-gray-100 flex justify-end">
+          <button
+            type="button"
+            onClick={() => printOrderInvoice(order)}
+            className="w-full sm:w-auto flex items-center justify-center gap-2 h-12 px-6 rounded-xl text-base font-bold text-purple-900 bg-purple-50 hover:bg-purple-100 border border-purple-200 transition-colors focus-ring"
+          >
+            <Printer size={20} />
+            Imprimir Comprovante (A4)
+          </button>
+        </div>
 
         {/* Ações / Botões (Apenas se não estiver entregue) */}
         {order.status !== 'entregue' && order.status !== 'cancelado' && (

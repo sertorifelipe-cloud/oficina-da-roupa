@@ -2,15 +2,16 @@ import { useState, useEffect, useRef } from 'react'
 import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { z } from 'zod'
-import { Loader2, Search, User, Plus, Trash2, Scissors } from 'lucide-react'
+import { Loader2, Search, User, Plus, Trash2, Scissors, Printer } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { supabase } from '@/lib/supabaseClient'
 import { toast } from 'sonner'
-import type { Client, Service } from '@/types/database'
+import type { Client, Service, Order } from '@/types/database'
 import { useAuth } from '@/contexts/AuthContext'
+import { printOrderInvoice } from '@/lib/printHelper'
 
 interface NewOrderModalProps {
   isOpen: boolean
@@ -59,6 +60,8 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
   const [selectedClient, setSelectedClient] = useState<Client | null>(null)
 
   const [showClientDropdown, setShowClientDropdown] = useState(false)
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false)
+  const [insertedOrderData, setInsertedOrderData] = useState<Order | null>(null)
   
   const dropdownRef = useRef<HTMLDivElement>(null)
 
@@ -104,6 +107,8 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
       setClientSearch('')
       setSelectedClient(null)
       setClientResults([])
+      setShowSuccessScreen(false)
+      setInsertedOrderData(null)
     }
   }, [isOpen, reset])
 
@@ -178,13 +183,14 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
           created_by: profile?.id || user?.id,
           status: 'recebido'
         }])
-        .select()
+        .select('*, client:clients(*)')
         .single()
 
       if (error) throw error
 
       toast.success(`Pedido criado com sucesso! Comanda #${String(insertedOrder.order_number).padStart(4, '0')}`)
-      onSuccess()
+      setInsertedOrderData(insertedOrder as Order)
+      setShowSuccessScreen(true)
     } catch (err: any) {
       console.error('Erro ao criar pedido:', err)
       toast.error('Ocorreu um erro ao salvar o pedido.')
@@ -192,8 +198,80 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Novo Pedido de Costuraria" maxWidth="max-w-4xl">
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+    <Modal 
+      isOpen={isOpen} 
+      onClose={showSuccessScreen ? onSuccess : onClose} 
+      title={showSuccessScreen ? "Pedido Cadastrado" : "Novo Pedido de Costuraria"} 
+      maxWidth="max-w-4xl"
+    >
+      {showSuccessScreen ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center space-y-6">
+          <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-inner animate-bounce">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-10 h-10">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          </div>
+          
+          <div className="space-y-2">
+            <h2 className="text-2xl font-black text-gray-900">Pedido Cadastrado com Sucesso!</h2>
+            <p className="text-gray-500 text-base max-w-md">
+              O pedido de costuraria foi registrado e a comanda foi gerada.
+            </p>
+          </div>
+
+          {insertedOrderData && (
+            <div className="bg-purple-50 p-6 rounded-2xl border border-purple-100 w-full max-w-md text-left space-y-3">
+              <div className="flex justify-between text-base text-gray-600">
+                <span>Comanda:</span>
+                <span className="font-bold text-gray-900">
+                  #{String(insertedOrderData.order_number).padStart(4, '0')}
+                </span>
+              </div>
+              <div className="flex justify-between text-base text-gray-600">
+                <span>Cliente:</span>
+                <span className="font-bold text-gray-900">
+                  {insertedOrderData.client?.name || 'Não informado'}
+                </span>
+              </div>
+              <div className="flex justify-between text-base text-gray-600">
+                <span>Previsão de Entrega:</span>
+                <span className="font-bold text-gray-900">
+                  {new Date(insertedOrderData.expected_date.includes('T') ? insertedOrderData.expected_date : `${insertedOrderData.expected_date}T12:00:00`).toLocaleDateString('pt-BR')}
+                </span>
+              </div>
+              <div className="flex justify-between text-base text-gray-600">
+                <span>Total do Pedido:</span>
+                <span className="font-bold text-gray-900">
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(insertedOrderData.price)}
+                </span>
+              </div>
+              <div className="flex justify-between text-[16px] font-black text-purple-900 pt-2 border-t border-purple-200">
+                <span>Valor Entrada:</span>
+                <span>
+                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(insertedOrderData.amount_paid)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md pt-6">
+            <button
+              onClick={() => insertedOrderData && printOrderInvoice(insertedOrderData)}
+              className="flex-1 flex items-center justify-center gap-2 h-14 rounded-xl text-lg font-bold text-purple-900 bg-purple-50 border-2 border-purple-200 hover:bg-purple-100 transition-colors cursor-pointer focus-ring"
+            >
+              <Printer size={20} />
+              Imprimir Comprovante (A4)
+            </button>
+            <button
+              onClick={onSuccess}
+              className="flex-1 flex items-center justify-center gap-2 h-14 rounded-xl text-lg font-bold text-white bg-purple-900 hover:bg-purple-800 transition-colors cursor-pointer shadow-md focus-ring"
+            >
+              Concluir
+            </button>
+          </div>
+        </div>
+      ) : (
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
         
         {/* 1. Cliente */}
         <div className="relative flex flex-col gap-2 w-full" ref={dropdownRef}>
@@ -421,7 +499,8 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
           </button>
         </div>
 
-      </form>
+        </form>
+      )}
     </Modal>
   )
 }
