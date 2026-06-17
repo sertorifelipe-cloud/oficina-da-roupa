@@ -32,7 +32,7 @@ export interface Service {
   created_at: string
 }
 
-export type OrderStatus = 'recebido' | 'em_andamento' | 'pronto' | 'entregue'
+export type OrderStatus = 'recebido' | 'em_andamento' | 'pronto' | 'entregue' | 'cancelado'
 
 export interface ServiceItem {
   service_id: string

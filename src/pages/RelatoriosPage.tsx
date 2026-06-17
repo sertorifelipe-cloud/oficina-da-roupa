@@ -16,6 +16,7 @@ const statusConfig = {
   em_andamento: { label: 'Em andamento', bg: 'bg-yellow-100', text: 'text-yellow-800' },
   pronto: { label: 'Pronto', bg: 'bg-green-100', text: 'text-green-800' },
   entregue: { label: 'Entregue', bg: 'bg-purple-100', text: 'text-purple-900' },
+  cancelado: { label: 'Cancelado', bg: 'bg-red-50', text: 'text-red-700' },
 }
 
 const paymentConfig = {
@@ -143,6 +144,7 @@ export function RelatoriosPage() {
 
   // --- Lógicas do Relatório de Entrega ---
   const today = startOfDay(new Date())
+  const activeOrders = orders.filter(order => order.status !== 'cancelado')
   let ordersLate = 0
   let ordersDelivered = 0
   let ordersOpen = 0
@@ -158,7 +160,7 @@ export function RelatoriosPage() {
   let costurariaTotalReceived = 0
   let costurariaTotalPending = 0
 
-  orders.forEach(order => {
+  activeOrders.forEach(order => {
     ordersTotalValue += (order.price || 0)
     if (order.status === 'entregue') {
       ordersDelivered++
@@ -201,11 +203,11 @@ export function RelatoriosPage() {
     }
   })
 
-  const orderTicketMedio = orders.length > 0 ? ordersTotalValue / orders.length : 0
+  const orderTicketMedio = activeOrders.length > 0 ? ordersTotalValue / activeOrders.length : 0
 
   // Top Serviços Rentáveis (Costuraria)
   const serviceRevenue: Record<string, number> = {}
-  orders.forEach(order => {
+  activeOrders.forEach(order => {
     // Se tiver múltiplos serviços (services_items), somamos cada um
     if (order.services_items && order.services_items.length > 0) {
       order.services_items.forEach(item => {

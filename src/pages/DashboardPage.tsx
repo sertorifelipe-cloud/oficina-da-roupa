@@ -24,6 +24,7 @@ const statusConfig = {
   em_andamento: { label: 'Em andamento', bg: 'bg-yellow-100', text: 'text-yellow-800' },
   pronto: { label: 'Pronto', bg: 'bg-green-100', text: 'text-green-800' },
   entregue: { label: 'Entregue', bg: 'bg-purple-100', text: 'text-purple-900' },
+  cancelado: { label: 'Cancelado', bg: 'bg-red-50', text: 'text-red-700' },
 }
 
 const paymentConfig = {
@@ -56,11 +57,11 @@ export function DashboardPage() {
     async function fetchDashboardData() {
       setIsLoading(true)
       try {
-        // 1. Pedidos em aberto (não entregues)
+        // 1. Pedidos em aberto (não entregues e não cancelados)
         const { count: openOrdersCount } = await supabase
           .from('orders')
           .select('*', { count: 'exact', head: true })
-          .neq('status', 'entregue')
+          .not('status', 'in', '("entregue","cancelado")')
 
         // 2. Entregas hoje (orders com delivery_date = hoje)
         // Como o Supabase salva a data, vamos comparar a string

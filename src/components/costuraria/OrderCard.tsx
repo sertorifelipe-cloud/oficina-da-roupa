@@ -13,6 +13,7 @@ const statusConfig = {
   em_andamento: { label: 'Em andamento', bg: 'bg-yellow-100', text: 'text-yellow-800' },
   pronto: { label: 'Pronto', bg: 'bg-green-100', text: 'text-green-800' },
   entregue: { label: 'Entregue', bg: 'bg-purple-100', text: 'text-purple-900' },
+  cancelado: { label: 'Cancelado', bg: 'bg-red-50', text: 'text-red-700' },
 }
 
 export function OrderCard({ order, onViewDetails }: OrderCardProps) {

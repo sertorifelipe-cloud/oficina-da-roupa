@@ -19,6 +19,7 @@ const statusConfig = {
   em_andamento: { label: 'Em andamento', bg: 'bg-yellow-100', text: 'text-yellow-800' },
   pronto: { label: 'Pronto', bg: 'bg-green-100', text: 'text-green-800' },
   entregue: { label: 'Entregue', bg: 'bg-purple-100', text: 'text-purple-900' },
+  cancelado: { label: 'Cancelado', bg: 'bg-red-50', text: 'text-red-700' },
 }
 
 const paymentConfig = {
@@ -141,6 +142,31 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
     }
   }
 
+  async function handleCancelOrder() {
+    if (!window.confirm('Deseja realmente cancelar este pedido? Esta ação não pode ser desfeita.')) {
+      return
+    }
+
+    setIsUpdating(true)
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ status: 'cancelado' })
+        .eq('id', order!.id)
+
+      if (error) throw error
+
+      toast.success('Pedido cancelado com sucesso!')
+      onUpdate()
+      onClose()
+    } catch (error: any) {
+      console.error('Erro ao cancelar pedido:', error)
+      toast.error('Erro ao cancelar o pedido. Tente novamente.')
+    } finally {
+      setIsUpdating(false)
+    }
+  }
+
   return (
     <Modal
       isOpen={isOpen}
@@ -187,7 +213,7 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
               </div>
             </div>
 
-            {order.status !== 'entregue' && order.price - localAmountPaid > 0 && (
+            {order.status !== 'entregue' && order.status !== 'cancelado' && order.price - localAmountPaid > 0 && (
               <div className="mt-3">
                 {!showPaymentInput ? (
                   <button
@@ -232,7 +258,7 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
         </div>
 
         {/* Alerta de Pagamento Pendente */}
-        {order.status !== 'entregue' && order.price - localAmountPaid > 0 && (
+        {order.status !== 'entregue' && order.status !== 'cancelado' && order.price - localAmountPaid > 0 && (
           <div className="bg-amber-50 border-l-4 border-amber-500 p-4 rounded-r-xl flex items-center gap-3">
             <span className="text-[20px]">⚠️</span>
             <div>
@@ -293,19 +319,29 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
         )}
 
         {/* Ações / Botões (Apenas se não estiver entregue) */}
-        {order.status !== 'entregue' && (
+        {order.status !== 'entregue' && order.status !== 'cancelado' && (
           <div className="pt-6 mt-6 border-t border-gray-200 flex flex-col gap-4">
             <h4 className="text-lg font-bold text-gray-800 mb-2">Atualizar Status:</h4>
             
             {order.status === 'recebido' && (
-              <button
-                disabled={isUpdating}
-                onClick={() => handleStatusChange('em_andamento')}
-                className="w-full flex items-center justify-center gap-2 h-[60px] rounded-xl text-[18px] font-bold text-yellow-800 bg-yellow-100 hover:bg-yellow-200 transition-colors focus-ring"
-              >
-                <ArrowRight size={24} />
-                Marcar como Em andamento
-              </button>
+              <div className="flex flex-col sm:flex-row gap-4 w-full">
+                <button
+                  type="button"
+                  disabled={isUpdating}
+                  onClick={handleCancelOrder}
+                  className="sm:w-1/3 flex items-center justify-center gap-2 h-[60px] rounded-xl text-[18px] font-bold text-red-700 bg-red-50 hover:bg-red-100 border border-red-200 transition-colors focus-ring"
+                >
+                  Cancelar Pedido
+                </button>
+                <button
+                  disabled={isUpdating}
+                  onClick={() => handleStatusChange('em_andamento')}
+                  className="flex-1 flex items-center justify-center gap-2 h-[60px] rounded-xl text-[18px] font-bold text-yellow-800 bg-yellow-100 hover:bg-yellow-200 transition-colors focus-ring"
+                >
+                  <ArrowRight size={24} />
+                  Marcar como Em andamento
+                </button>
+              </div>
             )}
 
             {order.status === 'em_andamento' && (

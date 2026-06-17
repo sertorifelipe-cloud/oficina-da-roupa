@@ -15,6 +15,7 @@ const filterOptions: { value: FilterStatus; label: string }[] = [
   { value: 'em_andamento', label: 'Em andamento' },
   { value: 'pronto', label: 'Pronto' },
   { value: 'entregue', label: 'Entregue' },
+  { value: 'cancelado', label: 'Cancelado' },
 ]
 
 export function CosturariaPage() {
