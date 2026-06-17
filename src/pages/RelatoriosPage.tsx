@@ -141,6 +141,16 @@ export function RelatoriosPage() {
   let ordersOpen = 0
   let ordersTotalValue = 0
 
+  // Consolidação de pagamentos da Costuraria (Entrada + Saldo de Entrega)
+  const costurariaPaymentStats: Record<string, { total: number; qtd: number }> = {
+    dinheiro: { total: 0, qtd: 0 },
+    pix: { total: 0, qtd: 0 },
+    cartao_debito: { total: 0, qtd: 0 },
+    cartao_credito: { total: 0, qtd: 0 },
+  }
+  let costurariaTotalReceived = 0
+  let costurariaTotalPending = 0
+
   orders.forEach(order => {
     ordersTotalValue += (order.price || 0)
     if (order.status === 'entregue') {
@@ -149,6 +159,37 @@ export function RelatoriosPage() {
       ordersOpen++
       if (order.expected_date && isBefore(new Date(`${order.expected_date}T12:00:00`), today)) {
         ordersLate++
+      }
+    }
+
+    // 1. Pagamento de entrada
+    if (order.amount_paid > 0 && order.payment_method) {
+      const method = order.payment_method
+      if (costurariaPaymentStats[method]) {
+        costurariaPaymentStats[method].total += order.amount_paid
+        costurariaPaymentStats[method].qtd += 1
+      }
+      costurariaTotalReceived += order.amount_paid
+    }
+
+    // 2. Pagamento de entrega (se status entregue e tiver saldo restante)
+    const totalOrderPrice = order.price || 0
+    const entryPaid = order.amount_paid || 0
+    if (order.status === 'entregue') {
+      const deliveryAmount = totalOrderPrice - entryPaid
+      if (deliveryAmount > 0 && order.delivery_payment_method) {
+        const method = order.delivery_payment_method
+        if (costurariaPaymentStats[method]) {
+          costurariaPaymentStats[method].total += deliveryAmount
+          costurariaPaymentStats[method].qtd += 1
+        }
+        costurariaTotalReceived += deliveryAmount
+      }
+    } else {
+      // Pedido não entregue: o saldo pendente a receber é o valor total - entrada
+      const pendingAmount = totalOrderPrice - entryPaid
+      if (pendingAmount > 0) {
+        costurariaTotalPending += pendingAmount
       }
     }
   })
@@ -240,10 +281,16 @@ export function RelatoriosPage() {
   }
 
   const exportEntrega = () => {
-    let csv = 'Comanda;Cliente;Serviço;Valor;Data Entrada;Previsão;Data Entrega;Status;Atrasado?\n'
+    let csv = 'Comanda;Cliente;Data Entrada;Previsão;Data Entrega;Valor Total;Valor Pago Entrada;Meio Pagamento Entrada;Saldo Retirada;Meio Pagamento Retirada;Total Recebido;Pendente;Status;Atrasado?\n'
     orders.forEach(o => {
       const isLate = o.status !== 'entregue' && o.expected_date && isBefore(new Date(`${o.expected_date}T12:00:00`), today)
-      csv += `"${o.order_number}";"${o.client?.name || '-'}";"${o.service?.name || '-'}";"${o.price}";"${o.entry_date}";"${o.expected_date}";"${o.delivery_date || '-'}";"${statusConfig[o.status].label}";"${isLate ? 'SIM' : 'NÃO'}"\n`
+      const totalOrderPrice = o.price || 0
+      const entryPaid = o.amount_paid || 0
+      const deliveryPaid = o.status === 'entregue' ? (totalOrderPrice - entryPaid) : 0
+      const totalRec = entryPaid + deliveryPaid
+      const pending = o.status !== 'entregue' ? (totalOrderPrice - entryPaid) : 0
+
+      csv += `"${String(o.order_number).padStart(4, '0')}";"${o.client?.name || '-'}";"${o.entry_date}";"${o.expected_date}";"${o.delivery_date || '-'}";"${totalOrderPrice}";"${entryPaid}";"${o.payment_method ? (paymentConfig[o.payment_method] || o.payment_method) : '-'}";"${deliveryPaid}";"${o.delivery_payment_method ? (paymentConfig[o.delivery_payment_method] || o.delivery_payment_method) : '-'}";"${totalRec}";"${pending}";"${statusConfig[o.status].label}";"${isLate ? 'SIM' : 'NÃO'}"\n`
     })
     downloadCSV(csv, 'relatorio_entregas.csv')
   }
@@ -392,17 +439,23 @@ export function RelatoriosPage() {
                         <tr>
                           <th className="p-4 font-bold">Comanda</th>
                           <th className="p-4 font-bold">Cliente</th>
-                          <th className="p-4 font-bold text-right">Valor</th>
+                          <th className="p-4 font-bold">Entrada</th>
+                          <th className="p-4 font-bold">Retirada</th>
+                          <th className="p-4 font-bold text-right">Valor Total</th>
                           <th className="p-4 font-bold text-center">Status</th>
                         </tr>
                       </thead>
                       <tbody>
                         {orders.length === 0 ? (
-                          <tr><td colSpan={4} className="p-8 text-center text-gray-500">Nenhum pedido encontrado.</td></tr>
+                          <tr><td colSpan={6} className="p-8 text-center text-gray-500">Nenhum pedido encontrado.</td></tr>
                         ) : (
                           orders.map(o => {
-
                             const st = statusConfig[o.status]
+                            const totalOrderPrice = o.price || 0
+                            const entryPaid = o.amount_paid || 0
+                            const deliveryPaid = o.status === 'entregue' ? (totalOrderPrice - entryPaid) : 0
+                            const pending = o.status !== 'entregue' ? (totalOrderPrice - entryPaid) : 0
+
                             return (
                               <tr key={o.id} className={`border-b border-gray-100 transition-colors hover:bg-gray-50`}>
                                 <td className="p-4 font-bold text-gray-700 text-[16px]">#{String(o.order_number).padStart(4, '0')}</td>
@@ -410,7 +463,38 @@ export function RelatoriosPage() {
                                   <p className="font-bold text-gray-900">{o.client?.name || '-'}</p>
                                   <p className="text-xs text-gray-500">{formatDate(o.entry_date)}</p>
                                 </td>
-                                <td className="p-4 font-bold text-purple-900 text-right">{formatCurrency(o.price || 0)}</td>
+                                <td className="p-4">
+                                  {entryPaid > 0 ? (
+                                    <div>
+                                      <p className="font-bold text-emerald-800">{formatCurrency(entryPaid)}</p>
+                                      <p className="text-[11px] text-gray-500 uppercase">{o.payment_method ? (paymentConfig[o.payment_method] || o.payment_method) : '-'}</p>
+                                    </div>
+                                  ) : (
+                                    <span className="text-gray-400 text-sm">-</span>
+                                  )}
+                                </td>
+                                <td className="p-4">
+                                  {o.status === 'entregue' ? (
+                                    deliveryPaid > 0 ? (
+                                      <div>
+                                        <p className="font-bold text-purple-900">{formatCurrency(deliveryPaid)}</p>
+                                        <p className="text-[11px] text-gray-500 uppercase">{o.delivery_payment_method ? (paymentConfig[o.delivery_payment_method] || o.delivery_payment_method) : '-'}</p>
+                                      </div>
+                                    ) : (
+                                      <span className="text-emerald-700 text-xs font-semibold">Sem saldo devedor</span>
+                                    )
+                                  ) : (
+                                    pending > 0 ? (
+                                      <div>
+                                        <p className="font-medium text-amber-700">{formatCurrency(pending)}</p>
+                                        <p className="text-[11px] text-amber-600 font-semibold uppercase">Pendente</p>
+                                      </div>
+                                    ) : (
+                                      <span className="text-gray-400 text-sm">-</span>
+                                    )
+                                  )}
+                                </td>
+                                <td className="p-4 font-bold text-purple-900 text-right">{formatCurrency(totalOrderPrice)}</td>
                                 <td className="p-4 text-center">
                                   <span className={`px-3 py-1 rounded-full text-xs font-bold ${st.bg} ${st.text}`}>
                                     {st.label}
@@ -425,25 +509,70 @@ export function RelatoriosPage() {
                   </div>
                 </div>
 
-                {/* Serviços mais rentáveis */}
-                <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm h-fit">
-                  <h3 className="text-xl font-bold text-gray-900 mb-6">Top Serviços (Receita)</h3>
-                  <div className="space-y-6">
-                    {topCosturariaData.map((item, idx) => (
-                      <div key={item.name} className="space-y-2">
-                        <div className="flex justify-between items-end">
-                          <span className="font-bold text-gray-700">{idx + 1}. {item.name}</span>
-                          <span className="font-black text-purple-900">{formatCurrency(item.value)}</span>
+                {/* Coluna Lateral de Resumos */}
+                <div className="space-y-8 lg:col-span-1">
+                  {/* Tabela de Recebimentos por Forma de Pagamento */}
+                  <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden flex flex-col h-fit">
+                    <h3 className="text-xl font-bold text-gray-900 p-6 border-b border-gray-100 bg-gray-50">Recebimentos por Forma de Pagamento</h3>
+                    <div className="p-6">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="text-gray-500 border-b border-gray-200">
+                            <th className="pb-3 font-semibold text-[15px]">Método</th>
+                            <th className="pb-3 font-semibold text-[15px] text-center">Uso</th>
+                            <th className="pb-3 font-semibold text-[15px] text-right">Total</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Object.entries(costurariaPaymentStats).map(([method, data]) => {
+                            return (
+                              <tr key={method} className="border-b border-gray-100 last:border-0 hover:bg-gray-50/50">
+                                <td className="py-3 text-[16px] font-bold text-gray-800">{paymentConfig[method as keyof typeof paymentConfig] || method}</td>
+                                <td className="py-3 text-[16px] text-gray-600 text-center">{data.qtd}</td>
+                                <td className="py-3 text-[16px] font-bold text-purple-900 text-right">{formatCurrency(data.total)}</td>
+                              </tr>
+                            )
+                          })}
+                        </tbody>
+                      </table>
+                      
+                      <div className="mt-4 pt-4 border-t border-gray-200 space-y-2">
+                        <div className="flex justify-between items-center text-[15px] text-gray-600">
+                          <span>Total Recebido (Caixa):</span>
+                          <span className="font-bold text-emerald-700">{formatCurrency(costurariaTotalReceived)}</span>
                         </div>
-                        <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
-                          <div 
-                            className="h-full bg-emerald-500 rounded-full" 
-                            style={{ width: `${(item.value / topCosturariaData[0].value) * 100}%` }}
-                          />
+                        <div className="flex justify-between items-center text-[15px] text-gray-600">
+                          <span>Total Pendente (A Receber):</span>
+                          <span className="font-bold text-amber-700">{formatCurrency(costurariaTotalPending)}</span>
+                        </div>
+                        <div className="flex justify-between items-center text-[16px] font-bold text-gray-900 pt-1 border-t border-dashed border-gray-200">
+                          <span>Total Geral Comandas:</span>
+                          <span>{formatCurrency(ordersTotalValue)}</span>
                         </div>
                       </div>
-                    ))}
-                    {topCosturariaData.length === 0 && <p className="text-center text-gray-500 py-10">Sem dados financeiros.</p>}
+                    </div>
+                  </div>
+
+                  {/* Serviços mais rentáveis */}
+                  <div className="bg-white p-6 rounded-2xl border border-gray-200 shadow-sm h-fit">
+                    <h3 className="text-xl font-bold text-gray-900 mb-6">Top Serviços (Receita)</h3>
+                    <div className="space-y-6">
+                      {topCosturariaData.map((item, idx) => (
+                        <div key={item.name} className="space-y-2">
+                          <div className="flex justify-between items-end">
+                            <span className="font-bold text-gray-700">{idx + 1}. {item.name}</span>
+                            <span className="font-black text-purple-900">{formatCurrency(item.value)}</span>
+                          </div>
+                          <div className="h-2 bg-gray-100 rounded-full overflow-hidden">
+                            <div 
+                              className="h-full bg-emerald-500 rounded-full" 
+                              style={{ width: `${topCosturariaData[0]?.value ? (item.value / topCosturariaData[0].value) * 100 : 0}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                      {topCosturariaData.length === 0 && <p className="text-center text-gray-500 py-10">Sem dados financeiros.</p>}
+                    </div>
                   </div>
                 </div>
               </div>

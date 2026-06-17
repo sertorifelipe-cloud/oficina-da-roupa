@@ -21,6 +21,13 @@ const statusConfig = {
   entregue: { label: 'Entregue', bg: 'bg-purple-100', text: 'text-purple-900' },
 }
 
+const paymentConfig = {
+  dinheiro: 'Dinheiro',
+  pix: 'Pix',
+  cartao_debito: 'Débito',
+  cartao_credito: 'Crédito',
+}
+
 export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDetailsModalProps) {
   const [isUpdating, setIsUpdating] = useState(false)
   const [localAmountPaid, setLocalAmountPaid] = useState<number>(0)
@@ -76,7 +83,7 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
     }
   }
 
-  async function handleDeliverAndPayAll() {
+  async function handleDeliverAndPayAll(method: 'dinheiro' | 'pix' | 'cartao_debito' | 'cartao_credito') {
     setIsUpdating(true)
     try {
       const { error } = await supabase
@@ -84,13 +91,14 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
         .update({ 
           status: 'entregue',
           amount_paid: order!.price,
+          delivery_payment_method: method,
           delivery_date: new Date().toISOString().split('T')[0]
         })
         .eq('id', order!.id)
 
       if (error) throw error
 
-      toast.success('Pagamento recebido e pedido entregue!')
+      toast.success(`Pagamento via ${paymentConfig[method]} recebido e pedido entregue!`)
       onUpdate()
       onClose()
     } catch (err: any) {
@@ -159,7 +167,10 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
               </div>
               <div className="flex justify-between text-emerald-700">
                 <span className="font-medium">Valor Pago:</span>
-                <span className="font-bold">{formatCurrency(localAmountPaid)}</span>
+                <span className="font-bold">
+                  {formatCurrency(localAmountPaid)}
+                  {order.payment_method && ` (${paymentConfig[order.payment_method as keyof typeof paymentConfig]})`}
+                </span>
               </div>
               <div className="flex justify-between border-t border-dashed border-gray-200 pt-1 font-bold">
                 {order.price - localAmountPaid > 0 ? (
@@ -272,6 +283,11 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
             <div>
               <p className="text-purple-900 text-[16px] font-bold">Pedido Entregue</p>
               <p className="text-purple-700 text-[16px]">Data da entrega: {formatDate(order.delivery_date)}</p>
+              {order.delivery_payment_method && (
+                <p className="text-purple-700 text-[14px] mt-1">
+                  Forma de Pagamento: {paymentConfig[order.delivery_payment_method as keyof typeof paymentConfig]}
+                </p>
+              )}
             </div>
           </div>
         )}
@@ -305,19 +321,27 @@ export function OrderDetailsModal({ order, isOpen, onClose, onUpdate }: OrderDet
 
             {order.status === 'pronto' && (
               order.price - localAmountPaid > 0 ? (
-                <button
-                  disabled={isUpdating}
-                  onClick={() => handleDeliverAndPayAll()}
-                  className="w-full flex flex-col items-center justify-center h-[68px] rounded-xl text-white bg-amber-600 hover:bg-amber-700 transition-all shadow-lg focus-ring"
-                >
-                  <span className="flex items-center gap-2 text-[18px] font-bold">
-                    <Check size={24} strokeWidth={3} />
-                    Receber Restante e Entregar
-                  </span>
-                  <span className="text-xs opacity-90">
-                    Receber R$ {(order.price - localAmountPaid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })} restante no ato da entrega
-                  </span>
-                </button>
+                <div className="space-y-3 bg-amber-50 p-5 rounded-2xl border border-amber-200">
+                  <p className="text-amber-900 font-bold text-[16px] mb-2">Selecione a Forma de Pagamento do Saldo (R$ {(order.price - localAmountPaid).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}):</p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {[
+                      { id: 'dinheiro', label: 'Dinheiro' },
+                      { id: 'pix', label: 'Pix' },
+                      { id: 'cartao_debito', label: 'Débito' },
+                      { id: 'cartao_credito', label: 'Crédito' },
+                    ].map(method => (
+                      <button
+                        key={method.id}
+                        type="button"
+                        disabled={isUpdating}
+                        onClick={() => handleDeliverAndPayAll(method.id as any)}
+                        className="h-12 rounded-xl bg-amber-600 text-white font-bold hover:bg-amber-700 transition-colors text-sm focus-ring"
+                      >
+                        {method.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
               ) : (
                 <button
                   disabled={isUpdating}

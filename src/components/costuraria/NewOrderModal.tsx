@@ -29,6 +29,7 @@ const orderSchema = z.object({
   services_items: z.array(serviceItemSchema).min(1, 'Adicione pelo menos um serviço.'),
   expected_date: z.string().min(1, 'Informe a data de entrega prevista.'),
   amount_paid: z.number().min(0, 'Valor de entrada inválido.'),
+  payment_method: z.string().optional(),
   notes: z.string().optional()
 }).refine(data => {
   const total = data.services_items.reduce((acc, item) => acc + (item.price || 0), 0);
@@ -36,6 +37,14 @@ const orderSchema = z.object({
 }, {
   message: 'O valor de entrada não pode ser maior que o valor total do pedido.',
   path: ['amount_paid']
+}).refine(data => {
+  if (data.amount_paid > 0 && !data.payment_method) {
+    return false;
+  }
+  return true;
+}, {
+  message: 'Selecione o meio de pagamento da entrada.',
+  path: ['payment_method']
 })
 
 type OrderForm = z.infer<typeof orderSchema>
@@ -65,9 +74,12 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
     resolver: zodResolver(orderSchema),
     defaultValues: {
       services_items: [{ service_id: '', description: '', price: 0 }],
-      amount_paid: 0
+      amount_paid: 0,
+      payment_method: ''
     }
   })
+
+  const watchedAmountPaid = watch('amount_paid')
 
   const { fields, append, remove } = useFieldArray({
     control,
@@ -161,6 +173,7 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
           expected_date: data.expected_date,
           price: totalAmount,
           amount_paid: data.amount_paid || 0,
+          payment_method: data.amount_paid > 0 ? data.payment_method : null,
           notes: data.notes || null,
           created_by: profile?.id,
           status: 'recebido'
@@ -341,6 +354,44 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
               className="bg-white text-gray-900 h-14 font-medium"
               error={errors.amount_paid?.message}
             />
+            {watchedAmountPaid > 0 && (
+              <div className="flex flex-col gap-2">
+                <label className="text-[16px] font-semibold text-white">Forma de Pagamento da Entrada</label>
+                <div className="grid grid-cols-2 gap-2">
+                  <Controller
+                    name="payment_method"
+                    control={control}
+                    render={({ field }) => (
+                      <>
+                        {[
+                          { id: 'dinheiro', label: 'Dinheiro' },
+                          { id: 'pix', label: 'Pix' },
+                          { id: 'cartao_debito', label: 'Débito' },
+                          { id: 'cartao_credito', label: 'Crédito' },
+                        ].map(method => (
+                          <label key={method.id} className={`
+                            flex items-center justify-center h-12 rounded-xl border-2 cursor-pointer transition-colors text-sm
+                            ${field.value === method.id 
+                              ? 'bg-purple-900 border-white text-white font-bold' 
+                              : 'bg-white border-transparent text-purple-900 hover:bg-purple-50 font-semibold'}
+                          `}>
+                            <input 
+                              type="radio" 
+                              value={method.id} 
+                              className="sr-only"
+                              checked={field.value === method.id}
+                              onChange={() => field.onChange(method.id)}
+                            />
+                            <span>{method.label}</span>
+                          </label>
+                        ))}
+                      </>
+                    )}
+                  />
+                </div>
+                {errors.payment_method && <p className="text-sm text-red-300 font-bold">{errors.payment_method.message}</p>}
+              </div>
+            )}
           </div>
         </div>
 

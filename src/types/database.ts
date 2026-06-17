@@ -53,6 +53,8 @@ export interface Order {
   delivery_date?: string
   price: number
   amount_paid: number
+  payment_method?: PaymentMethod | null
+  delivery_payment_method?: PaymentMethod | null
   notes?: string
   created_by: string
   created_at: string
