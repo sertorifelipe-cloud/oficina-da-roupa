@@ -1,13 +1,14 @@
 import { useState, useEffect, useRef } from 'react'
-import { Loader2, Search, User, Plus, Trash2, Banknote, Receipt, Wallet, CreditCard, ArrowRight, ArrowLeft } from 'lucide-react'
+import { Loader2, Search, User, Plus, Trash2, Banknote, Receipt, Wallet, CreditCard, ArrowRight, ArrowLeft, Printer } from 'lucide-react'
 import { Modal } from '@/components/ui/Modal'
 import { Input } from '@/components/ui/Input'
 import { Textarea } from '@/components/ui/Textarea'
 import { SearchableSelect } from '@/components/ui/SearchableSelect'
 import { supabase } from '@/lib/supabaseClient'
 import { toast } from 'sonner'
-import type { Client, InventoryItem, PaymentMethod } from '@/types/database'
+import type { Client, InventoryItem, PaymentMethod, Sale } from '@/types/database'
 import { useAuth } from '@/contexts/AuthContext'
+import { printSaleInvoice } from '@/lib/printHelper'
 
 interface NewSaleModalProps {
   isOpen: boolean
@@ -59,6 +60,10 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
   const [notes, setNotes] = useState('')
 
+  // Sucesso da Venda & Impressão
+  const [showSuccessScreen, setShowSuccessScreen] = useState(false)
+  const [insertedSaleData, setInsertedSaleData] = useState<Sale | null>(null)
+
   useEffect(() => {
     if (isOpen) {
       setStep(1)
@@ -73,6 +78,8 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
       setDiscount(0)
       setPaymentMethod(null)
       setNotes('')
+      setShowSuccessScreen(false)
+      setInsertedSaleData(null)
 
       supabase
         .from('inventory_items')
@@ -196,7 +203,16 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
         notes: notes || null
       }
 
-      const { error } = await supabase.from('sales').insert([saleData]).select().single()
+      const { data: insertedSale, error } = await supabase
+        .from('sales')
+        .insert([saleData])
+        .select(`
+          *,
+          client:clients(*),
+          users_profiles(name)
+        `)
+        .single()
+
       if (error) throw error
 
       // 2. Registrar baixas no estoque para cada item
@@ -204,15 +220,16 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
         item_id: item.id,
         type: 'saida' as const,
         quantity: item.quantity,
-        reason: `Venda na Loja - Cliente: ${isClientFreeText ? clientNameFree : selectedClient?.name}`,
+        reason: `Venda na Loja - Cliente: ${isClientFreeText ? clientNameFree : (selectedClient?.name || 'Cliente cadastrado')}`,
         created_by: profile?.id
       }))
 
       const { error: movError } = await supabase.from('inventory_movements').insert(movements)
       if (movError) throw movError
 
+      setInsertedSaleData(insertedSale as Sale)
+      setShowSuccessScreen(true)
       toast.success(`Venda registrada! Total: ${formatCurrency(total)}`)
-      onSuccess()
     } catch (error) {
       console.error('Erro ao registrar venda:', error)
       toast.error('Ocorreu um erro ao registrar a venda.')
@@ -222,253 +239,314 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
   }
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Nova Venda" maxWidth="max-w-4xl">
-      {/* Indicador de Progresso */}
-      <div className="flex items-center justify-center gap-8 mb-8">
-        <div className={`flex items-center gap-2 text-lg font-bold ${step === 1 ? 'text-purple-900' : 'text-gray-400'}`}>
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 1 ? 'bg-purple-900 text-white' : 'bg-gray-200 text-gray-500'}`}>1</div>
-          Itens da Venda
-        </div>
-        <div className="w-16 h-1 bg-gray-200 rounded-full" />
-        <div className={`flex items-center gap-2 text-lg font-bold ${step === 2 ? 'text-purple-900' : 'text-gray-400'}`}>
-          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 2 ? 'bg-purple-900 text-white' : 'bg-gray-200 text-gray-500'}`}>2</div>
-          Pagamento
-        </div>
-      </div>
-
-      {step === 1 ? (
-        <div className="space-y-8">
-          {/* Seção de Cliente */}
-          <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
-            <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Cliente</h3>
-              <label className="flex items-center gap-2 cursor-pointer">
-                <input 
-                  type="checkbox" 
-                  checked={isClientFreeText}
-                  onChange={(e) => setIsClientFreeText(e.target.checked)}
-                  className="w-5 h-5 rounded text-purple-900 accent-purple-900"
-                />
-                <span className="text-lg font-medium text-gray-700">Venda sem cadastro</span>
-              </label>
-            </div>
-
-            {isClientFreeText ? (
-              <Input
-                label="Nome do cliente (Avulso)"
-                placeholder="Ex: João que passou na rua"
-                value={clientNameFree}
-                onChange={e => setClientNameFree(e.target.value)}
-              />
-            ) : (
-              <div className="relative flex flex-col gap-2 w-full" ref={clientDropdownRef}>
-                <label className="text-lg font-semibold text-gray-800">Buscar cliente cadastrado</label>
-                <div className="relative flex items-center">
-                  <div className="absolute left-4 text-gray-500"><Search size={20} /></div>
-                  <input
-                    type="text"
-                    placeholder="Digite o nome ou telefone (mín. 3 letras)"
-                    value={clientSearch}
-                    onChange={(e) => {
-                      setClientSearch(e.target.value)
-                      if (selectedClient) setSelectedClient(null)
-                    }}
-                    className="w-full h-14 pl-12 pr-4 rounded-xl border border-gray-300 text-lg text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-900 focus:border-transparent"
-                  />
-                  {isSearchingClient && <div className="absolute right-4 text-purple-900"><Loader2 size={20} className="animate-spin" /></div>}
-                </div>
-                
-                {showClientDropdown && clientResults.length > 0 && (
-                  <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
-                    {clientResults.map(c => (
-                      <button
-                        key={c.id} type="button" onClick={() => selectClient(c)}
-                        className="w-full text-left px-4 py-3 hover:bg-purple-50 flex items-center gap-3 border-b border-gray-100 last:border-0"
-                      >
-                        <div className="bg-purple-100 p-2 rounded-full text-purple-900"><User size={20} /></div>
-                        <div>
-                          <p className="font-bold text-gray-900 text-[16px]">{c.name}</p>
-                          {c.phone && <p className="text-gray-500 text-sm">{c.phone}</p>}
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
+    <Modal 
+      isOpen={isOpen} 
+      onClose={showSuccessScreen ? onSuccess : onClose} 
+      title={showSuccessScreen ? "Venda Concluída" : "Nova Venda"} 
+      maxWidth="max-w-4xl"
+    >
+      {showSuccessScreen ? (
+        <div className="flex flex-col items-center justify-center py-10 text-center space-y-6">
+          <div className="w-20 h-20 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center shadow-inner animate-bounce">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-10 h-10">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 12.75l6 6 9-13.5" />
+            </svg>
+          </div>
+          
+          <div className="space-y-2">
+            <h2 className="text-2xl font-black text-gray-900">Venda Registrada!</h2>
+            <p className="text-gray-500 text-base max-w-md">
+              A venda foi salva com sucesso no sistema e os itens foram baixados do estoque.
+            </p>
           </div>
 
-          {/* Adicionar Itens */}
-          <div className="bg-white p-6 rounded-xl border border-purple-100 shadow-sm">
-            <h3 className="text-xl font-bold text-purple-900 mb-4">Adicionar Item</h3>
-            <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
-              <div className="md:col-span-5">
-                <SearchableSelect
-                  label="Produto (Estoque)"
-                  value={currentItemId}
-                  onChange={val => setCurrentItemId(val)}
-                  options={inventoryItems.map(i => ({ 
-                    value: i.id, 
-                    label: `${i.name} (${i.current_quantity} ${i.unit})` 
-                  }))}
-                />
+          {insertedSaleData && (
+            <div className="bg-purple-50 p-6 rounded-2xl border border-purple-100 w-full max-w-md text-left space-y-3">
+              <div className="flex justify-between text-base text-gray-600">
+                <span>Cliente:</span>
+                <span className="font-bold text-gray-900">
+                  {insertedSaleData.client?.name || insertedSaleData.client_name_free || 'Cliente não cadastrado'}
+                </span>
               </div>
-              <div className="md:col-span-2">
-                <Input
-                  label="Qtd"
-                  type="number"
-                  min="1"
-                  value={currentQty}
-                  onChange={e => setCurrentQty(parseInt(e.target.value) || 0)}
-                />
+              <div className="flex justify-between text-base text-gray-600">
+                <span>Vendedor:</span>
+                <span className="font-bold text-gray-900">
+                  {insertedSaleData.users_profiles?.name || 'Não informado'}
+                </span>
               </div>
-              <div className="md:col-span-3">
-                <Input
-                  label="Preço Unit."
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  prefixNode={<span className="font-bold text-gray-600">R$</span>}
-                  value={currentPrice}
-                  onChange={e => setCurrentPrice(parseFloat(e.target.value) || 0)}
-                />
-              </div>
-              <div className="md:col-span-2">
-                <button
-                  onClick={handleAddToCart}
-                  className="w-full h-14 flex items-center justify-center gap-2 rounded-xl text-[16px] font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors focus-ring"
-                >
-                  <Plus size={20} /> Add
-                </button>
+              <div className="flex justify-between text-[16px] font-black text-purple-900 pt-2 border-t border-purple-200">
+                <span>Total Pago:</span>
+                <span>{formatCurrency(insertedSaleData.total || 0)}</span>
               </div>
             </div>
-          </div>
+          )}
 
-          {/* Carrinho */}
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Itens da Venda</h3>
-            {cart.length === 0 ? (
-              <p className="text-gray-500 text-lg italic text-center py-6 bg-gray-50 rounded-xl">
-                Nenhum item adicionado ainda.
-              </p>
-            ) : (
-              <div className="space-y-3">
-                {cart.map((item, index) => (
-                  <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
-                    <div>
-                      <p className="font-bold text-gray-900 text-[18px]">{item.name}</p>
-                      <p className="text-gray-500 text-[16px]">
-                        {item.quantity} un x {formatCurrency(item.unit_price)}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-6">
-                      <p className="font-bold text-purple-900 text-[18px]">
-                        {formatCurrency(item.total)}
-                      </p>
-                      <button
-                        onClick={() => handleRemoveFromCart(index)}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        title="Remover"
-                      >
-                        <Trash2 size={24} />
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-            <div>
-              <p className="text-gray-500 text-lg">Subtotal</p>
-              <p className="text-3xl font-bold text-gray-900">{formatCurrency(subtotal)}</p>
-            </div>
+          <div className="flex flex-col sm:flex-row gap-4 w-full max-w-md pt-6">
             <button
-              onClick={handleNextStep}
-              className="flex items-center justify-center gap-2 h-[60px] px-8 rounded-xl text-[20px] font-bold text-white bg-purple-900 hover:bg-purple-800 transition-colors shadow-lg focus-ring"
+              onClick={() => insertedSaleData && printSaleInvoice(insertedSaleData)}
+              className="flex-1 flex items-center justify-center gap-2 h-14 rounded-xl text-lg font-bold text-purple-900 bg-purple-50 border-2 border-purple-200 hover:bg-purple-100 transition-colors cursor-pointer focus-ring"
             >
-              Próximo Passo
-              <ArrowRight size={24} />
+              <Printer size={20} />
+              Imprimir Comprovante
+            </button>
+            <button
+              onClick={onSuccess}
+              className="flex-1 flex items-center justify-center gap-2 h-14 rounded-xl text-lg font-bold text-white bg-purple-900 hover:bg-purple-800 transition-colors cursor-pointer shadow-md focus-ring"
+            >
+              Concluir
             </button>
           </div>
         </div>
       ) : (
-        <div className="space-y-8">
-          {/* Valores Totais */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-purple-50 p-6 rounded-2xl border border-purple-100">
-            <div>
-              <p className="text-purple-700 text-lg mb-1">Subtotal da Venda</p>
-              <p className="text-2xl font-bold text-purple-900">{formatCurrency(subtotal)}</p>
-              
-              <div className="mt-4">
-                <Input
-                  label="Desconto R$ (Opcional)"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  max={subtotal}
-                  value={discount}
-                  onChange={e => setDiscount(parseFloat(e.target.value) || 0)}
-                  className="bg-white"
-                />
+        <>
+          {/* Indicador de Progresso */}
+          <div className="flex items-center justify-center gap-8 mb-8">
+            <div className={`flex items-center gap-2 text-lg font-bold ${step === 1 ? 'text-purple-900' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 1 ? 'bg-purple-900 text-white' : 'bg-gray-200 text-gray-500'}`}>1</div>
+              Itens da Venda
+            </div>
+            <div className="w-16 h-1 bg-gray-200 rounded-full" />
+            <div className={`flex items-center gap-2 text-lg font-bold ${step === 2 ? 'text-purple-900' : 'text-gray-400'}`}>
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center ${step === 2 ? 'bg-purple-900 text-white' : 'bg-gray-200 text-gray-500'}`}>2</div>
+              Pagamento
+            </div>
+          </div>
+
+          {step === 1 ? (
+            <div className="space-y-8">
+              {/* Seção de Cliente */}
+              <div className="bg-gray-50 p-6 rounded-xl border border-gray-100">
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-xl font-bold text-gray-900">Cliente</h3>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input 
+                      type="checkbox" 
+                      checked={isClientFreeText}
+                      onChange={(e) => setIsClientFreeText(e.target.checked)}
+                      className="w-5 h-5 rounded text-purple-900 accent-purple-900"
+                    />
+                    <span className="text-lg font-medium text-gray-700">Venda sem cadastro</span>
+                  </label>
+                </div>
+
+                {isClientFreeText ? (
+                  <Input
+                    label="Nome do cliente (Avulso)"
+                    placeholder="Ex: João que passou na rua"
+                    value={clientNameFree}
+                    onChange={e => setClientNameFree(e.target.value)}
+                  />
+                ) : (
+                  <div className="relative flex flex-col gap-2 w-full" ref={clientDropdownRef}>
+                    <label className="text-lg font-semibold text-gray-800">Buscar cliente cadastrado</label>
+                    <div className="relative flex items-center">
+                      <div className="absolute left-4 text-gray-500"><Search size={20} /></div>
+                      <input
+                        type="text"
+                        placeholder="Digite o nome ou telefone (mín. 3 letras)"
+                        value={clientSearch}
+                        onChange={(e) => {
+                          setClientSearch(e.target.value)
+                          if (selectedClient) setSelectedClient(null)
+                        }}
+                        className="w-full h-14 pl-12 pr-4 rounded-xl border border-gray-300 text-lg text-gray-900 bg-white shadow-sm focus:outline-none focus:ring-2 focus:ring-purple-900 focus:border-transparent"
+                      />
+                      {isSearchingClient && <div className="absolute right-4 text-purple-900"><Loader2 size={20} className="animate-spin" /></div>}
+                    </div>
+                    
+                    {showClientDropdown && clientResults.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 bg-white border border-gray-200 rounded-xl shadow-lg z-50 overflow-hidden">
+                        {clientResults.map(c => (
+                          <button
+                            key={c.id} type="button" onClick={() => selectClient(c)}
+                            className="w-full text-left px-4 py-3 hover:bg-purple-50 flex items-center gap-3 border-b border-gray-100 last:border-0"
+                          >
+                            <div className="bg-purple-100 p-2 rounded-full text-purple-900"><User size={20} /></div>
+                            <div>
+                              <p className="font-bold text-gray-900 text-[16px]">{c.name}</p>
+                              {c.phone && <p className="text-gray-500 text-sm">{c.phone}</p>}
+                            </div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Adicionar Itens */}
+              <div className="bg-white p-6 rounded-xl border border-purple-100 shadow-sm">
+                <h3 className="text-xl font-bold text-purple-900 mb-4">Adicionar Item</h3>
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-4 items-end">
+                  <div className="md:col-span-5">
+                    <SearchableSelect
+                      label="Produto (Estoque)"
+                      value={currentItemId}
+                      onChange={val => setCurrentItemId(val)}
+                      options={inventoryItems.map(i => ({ 
+                        value: i.id, 
+                        label: `${i.name} (${i.current_quantity} ${i.unit})` 
+                      }))}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <Input
+                      label="Qtd"
+                      type="number"
+                      min="1"
+                      value={currentQty}
+                      onChange={e => setCurrentQty(parseInt(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="md:col-span-3">
+                    <Input
+                      label="Preço Unit."
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      prefixNode={<span className="font-bold text-gray-600">R$</span>}
+                      value={currentPrice}
+                      onChange={e => setCurrentPrice(parseFloat(e.target.value) || 0)}
+                    />
+                  </div>
+                  <div className="md:col-span-2">
+                    <button
+                      onClick={handleAddToCart}
+                      className="w-full h-14 flex items-center justify-center gap-2 rounded-xl text-[16px] font-bold text-white bg-purple-600 hover:bg-purple-700 transition-colors focus-ring"
+                    >
+                      <Plus size={20} /> Add
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Carrinho */}
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 mb-4">Itens da Venda</h3>
+                {cart.length === 0 ? (
+                  <p className="text-gray-500 text-lg italic text-center py-6 bg-gray-50 rounded-xl">
+                    Nenhum item adicionado ainda.
+                  </p>
+                ) : (
+                  <div className="space-y-3">
+                    {cart.map((item, index) => (
+                      <div key={index} className="flex items-center justify-between p-4 bg-gray-50 rounded-xl border border-gray-200">
+                        <div>
+                          <p className="font-bold text-gray-900 text-[18px]">{item.name}</p>
+                          <p className="text-gray-500 text-[16px]">
+                            {item.quantity} un x {formatCurrency(item.unit_price)}
+                          </p>
+                        </div>
+                        <div className="flex items-center gap-6">
+                          <p className="font-bold text-purple-900 text-[18px]">
+                            {formatCurrency(item.total)}
+                          </p>
+                          <button
+                            onClick={() => handleRemoveFromCart(index)}
+                            className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
+                            title="Remover"
+                          >
+                            <Trash2 size={24} />
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+                <div>
+                  <p className="text-gray-500 text-lg">Subtotal</p>
+                  <p className="text-3xl font-bold text-gray-900">{formatCurrency(subtotal)}</p>
+                </div>
+                <button
+                  onClick={handleNextStep}
+                  className="flex items-center justify-center gap-2 h-[60px] px-8 rounded-xl text-[20px] font-bold text-white bg-purple-900 hover:bg-purple-800 transition-colors shadow-lg focus-ring"
+                >
+                  Próximo Passo
+                  <ArrowRight size={24} />
+                </button>
               </div>
             </div>
-            <div className="flex flex-col justify-end text-right">
-              <p className="text-purple-700 text-xl mb-1">Total a Pagar</p>
-              <p className="text-5xl font-black text-purple-900">{formatCurrency(total)}</p>
+          ) : (
+            <div className="space-y-8">
+              {/* Valores Totais */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-purple-50 p-6 rounded-2xl border border-purple-100">
+                <div>
+                  <p className="text-purple-700 text-lg mb-1">Subtotal da Venda</p>
+                  <p className="text-2xl font-bold text-purple-900">{formatCurrency(subtotal)}</p>
+                  
+                  <div className="mt-4">
+                    <Input
+                      label="Desconto R$ (Opcional)"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max={subtotal}
+                      value={discount}
+                      onChange={e => setDiscount(parseFloat(e.target.value) || 0)}
+                      className="bg-white"
+                    />
+                  </div>
+                </div>
+                <div className="flex flex-col justify-end text-right">
+                  <p className="text-purple-700 text-xl mb-1">Total a Pagar</p>
+                  <p className="text-5xl font-black text-purple-900">{formatCurrency(total)}</p>
+                </div>
+              </div>
+
+              {/* Formas de Pagamento */}
+              <div>
+                <h3 className="text-xl font-bold text-gray-900 mb-4">Como o cliente vai pagar?</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                  {paymentMethods.map(method => {
+                    const Icon = method.icon
+                    const isSelected = paymentMethod === method.id
+                    return (
+                      <button
+                        key={method.id}
+                        onClick={() => setPaymentMethod(method.id)}
+                        className={`flex flex-col items-center justify-center gap-3 p-6 rounded-2xl border-2 transition-all focus-ring ${
+                          isSelected 
+                            ? 'bg-purple-900 border-purple-900 text-white shadow-lg scale-105'
+                            : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                        }`}
+                      >
+                        <Icon size={32} />
+                        <span className="text-[18px] font-bold">{method.label}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+
+              <Textarea
+                label="Observações da Venda (Opcional)"
+                placeholder="Algum detalhe a registrar sobre o pagamento ou a venda?"
+                value={notes}
+                onChange={e => setNotes(e.target.value)}
+              />
+
+              <div className="flex items-center justify-between pt-6 border-t border-gray-200">
+                <button
+                  onClick={() => setStep(1)}
+                  className="flex items-center justify-center gap-2 h-[60px] px-8 rounded-xl text-[20px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors focus-ring"
+                >
+                  <ArrowLeft size={24} />
+                  Voltar
+                </button>
+                <button
+                  onClick={handleConfirmSale}
+                  disabled={isSubmitting}
+                  className="flex items-center justify-center gap-2 h-[60px] px-10 rounded-xl text-[22px] font-bold text-white bg-[#16a34a] hover:bg-[#15803d] transition-colors shadow-xl focus-ring disabled:opacity-70"
+                >
+                  {isSubmitting ? <Loader2 size={28} className="animate-spin" /> : '✓ Confirmar Venda'}
+                </button>
+              </div>
             </div>
-          </div>
-
-          {/* Formas de Pagamento */}
-          <div>
-            <h3 className="text-xl font-bold text-gray-900 mb-4">Como o cliente vai pagar?</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              {paymentMethods.map(method => {
-                const Icon = method.icon
-                const isSelected = paymentMethod === method.id
-                return (
-                  <button
-                    key={method.id}
-                    onClick={() => setPaymentMethod(method.id)}
-                    className={`flex flex-col items-center justify-center gap-3 p-6 rounded-2xl border-2 transition-all focus-ring ${
-                      isSelected 
-                        ? 'bg-purple-900 border-purple-900 text-white shadow-lg scale-105'
-                        : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                    }`}
-                  >
-                    <Icon size={32} />
-                    <span className="text-[18px] font-bold">{method.label}</span>
-                  </button>
-                )
-              })}
-            </div>
-          </div>
-
-          <Textarea
-            label="Observações da Venda (Opcional)"
-            placeholder="Algum detalhe a registrar sobre o pagamento ou a venda?"
-            value={notes}
-            onChange={e => setNotes(e.target.value)}
-          />
-
-          <div className="flex items-center justify-between pt-6 border-t border-gray-200">
-            <button
-              onClick={() => setStep(1)}
-              className="flex items-center justify-center gap-2 h-[60px] px-8 rounded-xl text-[20px] font-bold text-gray-700 bg-gray-100 hover:bg-gray-200 transition-colors focus-ring"
-            >
-              <ArrowLeft size={24} />
-              Voltar
-            </button>
-            <button
-              onClick={handleConfirmSale}
-              disabled={isSubmitting}
-              className="flex items-center justify-center gap-2 h-[60px] px-10 rounded-xl text-[22px] font-bold text-white bg-[#16a34a] hover:bg-[#15803d] transition-colors shadow-xl focus-ring disabled:opacity-70"
-            >
-              {isSubmitting ? <Loader2 size={28} className="animate-spin" /> : '✓ Confirmar Venda'}
-            </button>
-          </div>
-        </div>
+          )}
+        </>
       )}
     </Modal>
   )

@@ -1,7 +1,8 @@
 import { format } from 'date-fns'
 import { ptBR } from 'date-fns/locale'
-import { Receipt, Wallet, CreditCard, Banknote } from 'lucide-react'
+import { Receipt, Wallet, CreditCard, Banknote, Printer } from 'lucide-react'
 import type { Sale } from '@/types/database'
+import { printSaleInvoice } from '@/lib/printHelper'
 
 interface SaleCardProps {
   sale: Sale
@@ -92,6 +93,16 @@ export function SaleCard({ sale }: SaleCardProps) {
         <p className="text-[24px] font-bold">
           {formatCurrency(sale.total)}
         </p>
+      </div>
+
+      {/* Ações: Imprimir */}
+      <div className="p-3 bg-gray-50 border-t border-gray-100 flex gap-2">
+        <button
+          onClick={() => printSaleInvoice(sale)}
+          className="w-full flex items-center justify-center gap-2 h-11 rounded-xl font-bold text-[14px] text-purple-900 bg-white border border-purple-200 hover:bg-purple-50 transition-all cursor-pointer focus-ring"
+        >
+          <Printer size={16} /> Imprimir Comprovante (A4)
+        </button>
       </div>
     </div>
   )

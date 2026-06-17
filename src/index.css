@@ -89,3 +89,36 @@ label {
   outline: 3px solid #4c1d95;
   outline-offset: 2px;
 }
+
+/* =====================================================
+   Estilos de Impressão (Comprovantes A4)
+   ===================================================== */
+@media print {
+  /* Oculta tudo na tela */
+  body * {
+    visibility: hidden;
+  }
+  
+  /* Exibe somente a div gerada de comprovante de venda */
+  #sale-print-area, #sale-print-area * {
+    visibility: visible;
+  }
+  
+  #sale-print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 210mm;
+    height: 297mm;
+    padding: 0;
+    margin: 0;
+    box-sizing: border-box;
+    background: white;
+  }
+  
+  /* Configuração de página A4 retrato com margem zero */
+  @page {
+    size: A4 portrait;
+    margin: 0;
+  }
+}
