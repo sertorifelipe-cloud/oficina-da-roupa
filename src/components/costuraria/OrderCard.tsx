@@ -21,9 +21,14 @@ export function OrderCard({ order, onViewDetails }: OrderCardProps) {
   // Formatação segura de datas
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-'
-    // Adiciona T00:00:00 para evitar erro de timezone se for apenas data
-    const date = new Date(dateStr.includes('T') ? dateStr : `${dateStr}T12:00:00`)
-    return format(date, 'dd/MM/yyyy', { locale: ptBR })
+    try {
+      const date = new Date(dateStr.includes('T') ? dateStr : `${dateStr}T12:00:00`)
+      if (isNaN(date.getTime())) return '-'
+      return format(date, 'dd/MM/yyyy', { locale: ptBR })
+    } catch (err) {
+      console.error('Erro ao formatar data:', dateStr, err)
+      return '-'
+    }
   }
 
   const formatCurrency = (value?: number | null) => {

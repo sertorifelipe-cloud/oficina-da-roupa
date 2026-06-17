@@ -49,7 +49,14 @@ export function RelatoriosPage() {
   
   const formatDate = (dateStr?: string | null) => {
     if (!dateStr) return '-'
-    return format(new Date(dateStr.includes('T') ? dateStr : `${dateStr}T12:00:00`), 'dd/MM/yyyy', { locale: ptBR })
+    try {
+      const date = new Date(dateStr.includes('T') ? dateStr : `${dateStr}T12:00:00`)
+      if (isNaN(date.getTime())) return '-'
+      return format(date, 'dd/MM/yyyy', { locale: ptBR })
+    } catch (err) {
+      console.error('Erro ao formatar data:', dateStr, err)
+      return '-'
+    }
   }
 
   // Busca de dados
