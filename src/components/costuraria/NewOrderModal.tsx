@@ -197,6 +197,26 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
     }
   }
 
+  const formatCurrencySafe = (val: any) => {
+    if (val === null || val === undefined) return 'R$ 0,00'
+    const parsed = typeof val === 'string' ? parseFloat(val) : val
+    if (isNaN(parsed)) return 'R$ 0,00'
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(parsed)
+  }
+
+  const formatDateSafe = (dateStr: any) => {
+    if (!dateStr) return '-'
+    try {
+      const dateStrClean = String(dateStr)
+      const date = new Date(dateStrClean.includes('T') ? dateStrClean : `${dateStrClean}T12:00:00`)
+      if (isNaN(date.getTime())) return dateStrClean
+      return date.toLocaleDateString('pt-BR')
+    } catch (err) {
+      console.error('Erro ao formatar data no modal de sucesso:', err)
+      return String(dateStr)
+    }
+  }
+
   return (
     <Modal 
       isOpen={isOpen} 
@@ -224,7 +244,7 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
               <div className="flex justify-between text-base text-gray-600">
                 <span>Comanda:</span>
                 <span className="font-bold text-gray-900">
-                  #{String(insertedOrderData.order_number).padStart(4, '0')}
+                  #{String(insertedOrderData.order_number || '').padStart(4, '0')}
                 </span>
               </div>
               <div className="flex justify-between text-base text-gray-600">
@@ -236,19 +256,19 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
               <div className="flex justify-between text-base text-gray-600">
                 <span>Previsão de Entrega:</span>
                 <span className="font-bold text-gray-900">
-                  {new Date(insertedOrderData.expected_date.includes('T') ? insertedOrderData.expected_date : `${insertedOrderData.expected_date}T12:00:00`).toLocaleDateString('pt-BR')}
+                  {formatDateSafe(insertedOrderData.expected_date)}
                 </span>
               </div>
               <div className="flex justify-between text-base text-gray-600">
                 <span>Total do Pedido:</span>
                 <span className="font-bold text-gray-900">
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(insertedOrderData.price)}
+                  {formatCurrencySafe(insertedOrderData.price)}
                 </span>
               </div>
               <div className="flex justify-between text-[16px] font-black text-purple-900 pt-2 border-t border-purple-200">
                 <span>Valor Entrada:</span>
                 <span>
-                  {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(insertedOrderData.amount_paid)}
+                  {formatCurrencySafe(insertedOrderData.amount_paid)}
                 </span>
               </div>
             </div>
