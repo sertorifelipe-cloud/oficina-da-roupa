@@ -17,7 +17,7 @@ interface InventoryMovementModalProps {
 }
 
 export function InventoryMovementModal({ isOpen, onClose, onSuccess, item, type }: InventoryMovementModalProps) {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const [quantity, setQuantity] = useState<number | ''>('')
   const [reason, setReason] = useState('')
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -54,7 +54,7 @@ export function InventoryMovementModal({ isOpen, onClose, onSuccess, item, type 
         type: isInput ? 'entrada' : 'saida',
         quantity: Number(quantity),
         reason: reason || null,
-        created_by: profile?.id
+        created_by: profile?.id || user?.id
       }
 
       const { error } = await supabase.from('inventory_movements').insert([movementData])

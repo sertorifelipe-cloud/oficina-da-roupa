@@ -32,7 +32,7 @@ const paymentMethods: { id: PaymentMethod, label: string, icon: any }[] = [
 ]
 
 export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const [step, setStep] = useState<1 | 2>(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
 
@@ -194,7 +194,7 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
       const saleData = {
         client_id: isClientFreeText ? null : selectedClient?.id,
         client_name_free: isClientFreeText ? clientNameFree : null,
-        created_by: profile?.id,
+        created_by: profile?.id || user?.id,
         items: cart, // JSONB
         subtotal,
         discount,
@@ -221,7 +221,7 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
         type: 'saida' as const,
         quantity: item.quantity,
         reason: `Venda na Loja - Cliente: ${isClientFreeText ? clientNameFree : (selectedClient?.name || 'Cliente cadastrado')}`,
-        created_by: profile?.id
+        created_by: profile?.id || user?.id
       }))
 
       const { error: movError } = await supabase.from('inventory_movements').insert(movements)

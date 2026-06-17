@@ -30,7 +30,7 @@ const itemSchema = z.object({
 type ItemForm = z.infer<typeof itemSchema>
 
 export function NewItemModal({ isOpen, onClose, onSuccess }: NewItemModalProps) {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   
   const {
     register,
@@ -93,7 +93,7 @@ export function NewItemModal({ isOpen, onClose, onSuccess }: NewItemModalProps) 
             type: 'entrada',
             quantity: data.initial_quantity,
             reason: 'Estoque inicial',
-            created_by: profile?.id
+            created_by: profile?.id || user?.id
           }])
 
         if (movError) throw movError

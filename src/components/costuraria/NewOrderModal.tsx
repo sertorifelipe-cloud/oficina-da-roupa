@@ -50,7 +50,7 @@ const orderSchema = z.object({
 type OrderForm = z.infer<typeof orderSchema>
 
 export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps) {
-  const { profile } = useAuth()
+  const { profile, user } = useAuth()
   const [services, setServices] = useState<Service[]>([])
   
   // Autocomplete de Clientes
@@ -175,7 +175,7 @@ export function NewOrderModal({ isOpen, onClose, onSuccess }: NewOrderModalProps
           amount_paid: data.amount_paid || 0,
           payment_method: data.amount_paid > 0 ? data.payment_method : null,
           notes: data.notes || null,
-          created_by: profile?.id,
+          created_by: profile?.id || user?.id,
           status: 'recebido'
         }])
         .select()
