@@ -335,9 +335,9 @@ export function RelatoriosPage() {
   const exportVendas = () => {
     let csv = 'Data/Hora;Cliente;Vendedor;Método Pagamento;Subtotal;Desconto;Total;Itens (Qtd)\n'
     sales.forEach(s => {
-      let paymentStr = s.payment_method ? (paymentConfig[s.payment_method]?.label || s.payment_method) : '-'
+      let paymentStr = s.payment_method ? (paymentConfig[s.payment_method as keyof typeof paymentConfig] || s.payment_method) : '-'
       if (s.payment_method_2) {
-        paymentStr += ` / ${paymentConfig[s.payment_method_2]?.label || s.payment_method_2}`
+        paymentStr += ` / ${paymentConfig[s.payment_method_2 as keyof typeof paymentConfig] || s.payment_method_2}`
       }
       csv += `"${format(new Date(s.sale_date), 'dd/MM/yyyy HH:mm')}";"${s.client?.name || s.client_name_free || '-'}";"${s.users_profiles?.name || '-' }";"${paymentStr}";"${s.subtotal}";"${s.discount}";"${s.total}";"${s.items.length}"\n`
     })

@@ -382,12 +382,12 @@ export function DashboardPage() {
                             <div className="flex flex-col items-end gap-1">
                               {pay1 && (
                                 <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${pay1.bg} ${pay1.text}`}>
-                                  {pay1.label} {sale.payment_method_2 ? `(${formatCurrency(sale.payment_amount_1)})` : ''}
+                                  {pay1.label} {sale.payment_method_2 ? `(${formatCurrency(sale.payment_amount_1 || 0)})` : ''}
                                 </span>
                               )}
                               {pay2 && (
                                 <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${pay2.bg} ${pay2.text}`}>
-                                  {pay2.label} ({formatCurrency(sale.payment_amount_2)})
+                                  {pay2.label} ({formatCurrency(sale.payment_amount_2 || 0)})
                                 </span>
                               )}
                             </div>

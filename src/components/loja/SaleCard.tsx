@@ -29,8 +29,6 @@ export function SaleCard({ sale, onExchange }: SaleCardProps) {
   }
 
   const clientName = sale.client?.name || sale.client_name_free || 'Cliente não identificado'
-  const paymentInfo = sale.payment_method ? paymentConfig[sale.payment_method] : null
-  const PaymentIcon = paymentInfo?.icon
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-md transition-shadow flex flex-col">

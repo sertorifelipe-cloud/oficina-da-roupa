@@ -95,7 +95,7 @@ export function ExchangeModal({ isOpen, sale, onClose, onSuccess }: ExchangeModa
     if (newItemQty > newItem.current_quantity) {
       return toast.warning(`Atenção: Estoque insuficiente para "${newItem.name}" (${newItem.current_quantity} disponível).`)
     }
-
+    if (!sale) return toast.error('Venda não encontrada')
     setIsSubmitting(true)
     try {
       // 1. Registrar a troca na tabela exchanges
