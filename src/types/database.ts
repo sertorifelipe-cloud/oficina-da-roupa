@@ -88,6 +88,9 @@ export interface Sale {
   sale_date: string
   notes: string | null
   created_by: string | null
+  status?: 'concluida' | 'pendente'
+  amount_paid?: number | null
+  payment_history?: any[] | null
   // relações opcionais
   client?: Client
   users_profiles?: { name: string } | null

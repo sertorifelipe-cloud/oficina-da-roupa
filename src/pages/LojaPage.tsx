@@ -5,6 +5,7 @@ import type { Sale, PaymentMethod } from '@/types/database'
 import { SaleCard } from '@/components/loja/SaleCard'
 import { NewSaleModal } from '@/components/loja/NewSaleModal'
 import { ExchangeModal } from '@/components/loja/ExchangeModal'
+import { AddPaymentModal } from '@/components/loja/AddPaymentModal'
 import { toast } from 'sonner'
 import { Input } from '@/components/ui/Input'
 
@@ -31,6 +32,8 @@ export function LojaPage() {
   const [isNewSaleModalOpen, setIsNewSaleModalOpen] = useState(false)
   const [isExchangeModalOpen, setIsExchangeModalOpen] = useState(false)
   const [selectedSaleForExchange, setSelectedSaleForExchange] = useState<Sale | null>(null)
+  const [isAddPaymentModalOpen, setIsAddPaymentModalOpen] = useState(false)
+  const [selectedSaleForPayment, setSelectedSaleForPayment] = useState<Sale | null>(null)
 
   const fetchSales = useCallback(async () => {
     setIsLoading(true)
@@ -149,6 +152,10 @@ export function LojaPage() {
                 setSelectedSaleForExchange(s)
                 setIsExchangeModalOpen(true)
               }}
+              onAddPayment={(s) => {
+                setSelectedSaleForPayment(s)
+                setIsAddPaymentModalOpen(true)
+              }}
             />
           ))}
         </div>
@@ -173,6 +180,20 @@ export function LojaPage() {
         onSuccess={() => {
           setIsExchangeModalOpen(false)
           setSelectedSaleForExchange(null)
+          fetchSales()
+        }}
+      />
+
+      <AddPaymentModal
+        isOpen={isAddPaymentModalOpen}
+        sale={selectedSaleForPayment}
+        onClose={() => {
+          setIsAddPaymentModalOpen(false)
+          setSelectedSaleForPayment(null)
+        }}
+        onSuccess={() => {
+          setIsAddPaymentModalOpen(false)
+          setSelectedSaleForPayment(null)
           fetchSales()
         }}
       />

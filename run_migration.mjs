@@ -21,7 +21,7 @@ async function run() {
     await client.connect();
     console.log('Conectado ao banco de dados.');
 
-    const sql = fs.readFileSync('./supabase/migrations/011_add_multiple_payments.sql', 'utf8');
+    const sql = fs.readFileSync('./supabase/migrations/012_add_sale_partial_payments.sql', 'utf8');
     await client.query(sql);
     console.log('Migration de multiplos pagamentos executada com sucesso.');
 

@@ -66,8 +66,9 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
   const [discount, setDiscount] = useState(0)
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | null>(null)
   
-  // Divisão de Pagamento
+  // Divisão de Pagamento & Conta Pendurada
   const [isSplitPayment, setIsSplitPayment] = useState(false)
+  const [isCreditSale, setIsCreditSale] = useState(false)
   const [paymentAmount1, setPaymentAmount1] = useState<number>(0)
   const [paymentMethod2, setPaymentMethod2] = useState<PaymentMethod | null>(null)
   const [paymentAmount2, setPaymentAmount2] = useState<number>(0)
@@ -95,6 +96,7 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
       setDiscount(0)
       setPaymentMethod(null)
       setIsSplitPayment(false)
+      setIsCreditSale(false)
       setPaymentAmount1(0)
       setPaymentMethod2(null)
       setPaymentAmount2(0)
@@ -245,13 +247,24 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
   }
 
   const handleConfirmSale = async () => {
-    if (!paymentMethod) return toast.error('Selecione a forma de pagamento principal.')
-    if (isSplitPayment) {
-      if (!paymentMethod2) return toast.error('Selecione a segunda forma de pagamento.')
-      if (paymentMethod === paymentMethod2) return toast.error('As formas de pagamento devem ser diferentes.')
-      if (paymentAmount1 <= 0 || paymentAmount2 <= 0) return toast.error('Os valores de pagamento devem ser maiores que zero.')
-      if (Math.abs((paymentAmount1 + paymentAmount2) - total) > 0.01) {
-        return toast.error('A soma dos pagamentos deve ser exatamente igual ao total.')
+    let initialPaid = 0;
+    
+    if (isCreditSale) {
+      initialPaid = paymentAmount1
+      if (initialPaid > 0 && !paymentMethod) return toast.error('Selecione a forma de pagamento do valor inicial.')
+      if (initialPaid > total) return toast.error('O valor pago não pode ser maior que o total.')
+    } else {
+      if (!paymentMethod) return toast.error('Selecione a forma de pagamento principal.')
+      if (isSplitPayment) {
+        if (!paymentMethod2) return toast.error('Selecione a segunda forma de pagamento.')
+        if (paymentMethod === paymentMethod2) return toast.error('As formas de pagamento devem ser diferentes.')
+        if (paymentAmount1 <= 0 || paymentAmount2 <= 0) return toast.error('Os valores de pagamento devem ser maiores que zero.')
+        if (Math.abs((paymentAmount1 + paymentAmount2) - total) > 0.01) {
+          return toast.error('A soma dos pagamentos deve ser exatamente igual ao total.')
+        }
+        initialPaid = total
+      } else {
+        initialPaid = total
       }
     }
 
@@ -265,11 +278,14 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
         subtotal,
         discount,
         total,
-        payment_method: paymentMethod,
-        payment_amount_1: isSplitPayment ? paymentAmount1 : null,
+        payment_method: paymentMethod || null,
+        payment_amount_1: (isSplitPayment || isCreditSale) ? paymentAmount1 : null,
         payment_method_2: isSplitPayment ? paymentMethod2 : null,
         payment_amount_2: isSplitPayment ? paymentAmount2 : null,
-        notes: notes || null
+        notes: notes || null,
+        status: isCreditSale && initialPaid < total ? 'pendente' : 'concluida',
+        amount_paid: initialPaid,
+        payment_history: initialPaid > 0 ? [{ amount: initialPaid, method: paymentMethod, date: new Date().toISOString() }] : []
       }
 
       const { data: insertedSale, error } = await supabase
@@ -616,58 +632,80 @@ export function NewSaleModal({ isOpen, onClose, onSuccess }: NewSaleModalProps) 
 
               {/* Formas de Pagamento */}
               <div>
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-xl font-bold text-gray-900">Como o cliente vai pagar?</h3>
-                  {total > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsSplitPayment(!isSplitPayment)
-                        if (!isSplitPayment) {
-                          setPaymentAmount1(total / 2)
-                        } else {
-                          setPaymentMethod2(null)
-                        }
-                      }}
-                      className="text-purple-700 font-bold hover:text-purple-900 underline text-sm focus-ring"
-                    >
-                      {isSplitPayment ? 'Usar pagamento único' : '+ Dividir Pagamento'}
-                    </button>
-                  )}
+                <div className="flex flex-col gap-4 mb-4">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xl font-bold text-gray-900">Como o cliente vai pagar?</h3>
+                    {total > 0 && (
+                      <div className="flex items-center gap-4">
+                        <label className="flex items-center gap-2 cursor-pointer bg-orange-50 px-3 py-1.5 rounded-lg border border-orange-200">
+                          <input 
+                            type="checkbox" 
+                            checked={isCreditSale}
+                            onChange={(e) => {
+                              setIsCreditSale(e.target.checked)
+                              setIsSplitPayment(false)
+                              if (e.target.checked) setPaymentAmount1(0)
+                            }}
+                            className="w-4 h-4 rounded text-orange-600 accent-orange-600"
+                          />
+                          <span className="text-sm font-bold text-orange-800">Venda a Prazo (Conta Pendurada)</span>
+                        </label>
+
+                        {!isCreditSale && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setIsSplitPayment(!isSplitPayment)
+                              if (!isSplitPayment) {
+                                setPaymentAmount1(total / 2)
+                              } else {
+                                setPaymentMethod2(null)
+                              }
+                            }}
+                            className="text-purple-700 font-bold hover:text-purple-900 underline text-sm focus-ring"
+                          >
+                            {isSplitPayment ? 'Usar pagamento único' : '+ Dividir Pagamento'}
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 </div>
                 
                 <div className="space-y-6">
                   {/* Forma 1 */}
                   <div className="space-y-3">
                     {isSplitPayment && <p className="font-semibold text-gray-700">1ª Forma de Pagamento:</p>}
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                      {paymentMethods.map(method => {
-                        const Icon = method.icon
-                        const isSelected = paymentMethod === method.id
-                        return (
-                          <button
-                            key={method.id}
-                            onClick={() => setPaymentMethod(method.id)}
-                            className={`flex flex-col items-center justify-center gap-3 p-4 rounded-2xl border-2 transition-all focus-ring ${
-                              isSelected 
-                                ? 'bg-purple-900 border-purple-900 text-white shadow-lg scale-105'
-                                : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
-                            }`}
-                          >
-                            <Icon size={28} />
-                            <span className="text-[16px] font-bold">{method.label}</span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                    {isSplitPayment && paymentMethod && (
+                    {(!isCreditSale || paymentAmount1 > 0) && (
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        {paymentMethods.map(method => {
+                          const Icon = method.icon
+                          const isSelected = paymentMethod === method.id
+                          return (
+                            <button
+                              key={method.id}
+                              onClick={() => setPaymentMethod(method.id)}
+                              className={`flex flex-col items-center justify-center gap-3 p-4 rounded-2xl border-2 transition-all focus-ring ${
+                                isSelected 
+                                  ? 'bg-purple-900 border-purple-900 text-white shadow-lg scale-105'
+                                  : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'
+                              }`}
+                            >
+                              <Icon size={28} />
+                              <span className="text-[16px] font-bold">{method.label}</span>
+                            </button>
+                          )
+                        })}
+                      </div>
+                    )}
+                    {(isSplitPayment || isCreditSale) && (
                       <div className="mt-2 w-full md:w-1/2">
                         <Input
-                          label={`Valor em ${paymentMethods.find(m => m.id === paymentMethod)?.label}`}
+                          label={isCreditSale ? "Valor pago agora (pode ser 0)" : `Valor em ${paymentMethods.find(m => m.id === paymentMethod)?.label}`}
                           type="number"
                           step="0.01"
-                          min="0.01"
-                          max={total - 0.01}
+                          min={isCreditSale ? "0" : "0.01"}
+                          max={isCreditSale ? total : total - 0.01}
                           prefixNode={<span className="font-bold text-gray-600">R$</span>}
                           value={paymentAmount1}
                           onChange={e => setPaymentAmount1(parseFloat(e.target.value) || 0)}

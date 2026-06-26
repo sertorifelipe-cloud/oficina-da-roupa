@@ -7,6 +7,7 @@ import { printSaleInvoice } from '@/lib/printHelper'
 interface SaleCardProps {
   sale: Sale
   onExchange?: (sale: Sale) => void
+  onAddPayment?: (sale: Sale) => void
 }
 
 const paymentConfig = {
@@ -16,7 +17,7 @@ const paymentConfig = {
   cartao_credito: { label: 'Crédito', icon: CreditCard, bg: 'bg-indigo-100', text: 'text-indigo-800' },
 }
 
-export function SaleCard({ sale, onExchange }: SaleCardProps) {
+export function SaleCard({ sale, onExchange, onAddPayment }: SaleCardProps) {
   const formatCurrency = (value?: number | null) => {
     if (value === undefined || value === null) return 'R$ 0,00'
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
@@ -46,6 +47,11 @@ export function SaleCard({ sale, onExchange }: SaleCardProps) {
             )}
           </div>
           <div className="flex flex-col gap-1 items-end">
+            {sale.status === 'pendente' && (
+              <div className="flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-orange-100 text-orange-800 border border-orange-200">
+                Pendente
+              </div>
+            )}
             {sale.payment_method && paymentConfig[sale.payment_method] && (
               <div className={`flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold ${paymentConfig[sale.payment_method].bg} ${paymentConfig[sale.payment_method].text}`}>
                 {(() => { const Icon = paymentConfig[sale.payment_method].icon; return <Icon size={14} /> })()}
@@ -92,34 +98,54 @@ export function SaleCard({ sale, onExchange }: SaleCardProps) {
       </div>
 
       {/* Rodapé: Total */}
-      <div className="bg-purple-900 text-white p-5 flex items-center justify-between">
-        <div>
-          <p className="text-purple-200 text-sm">Total da venda</p>
-          {sale.discount > 0 && (
-            <p className="text-purple-300 text-xs mt-0.5">Desconto: {formatCurrency(sale.discount)}</p>
-          )}
+      <div className={`${sale.status === 'pendente' ? 'bg-orange-600' : 'bg-purple-900'} text-white p-5 flex flex-col gap-2`}>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className={`${sale.status === 'pendente' ? 'text-orange-200' : 'text-purple-200'} text-sm`}>Total da venda</p>
+            {sale.discount > 0 && (
+              <p className={`${sale.status === 'pendente' ? 'text-orange-300' : 'text-purple-300'} text-xs mt-0.5`}>Desconto: {formatCurrency(sale.discount)}</p>
+            )}
+          </div>
+          <p className="text-[24px] font-bold">
+            {formatCurrency(sale.total)}
+          </p>
         </div>
-        <p className="text-[24px] font-bold">
-          {formatCurrency(sale.total)}
-        </p>
+        {sale.status === 'pendente' && (
+          <div className="flex items-center justify-between pt-2 border-t border-orange-400 border-dashed">
+            <p className="text-orange-100 text-sm font-semibold">Valor Pendente</p>
+            <p className="text-xl font-bold text-white">
+              {formatCurrency((sale.total || 0) - (sale.amount_paid || 0))}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* Ações: Imprimir + Troca */}
-      <div className="p-3 bg-gray-50 border-t border-gray-100 flex gap-2">
-        <button
-          onClick={() => printSaleInvoice(sale)}
-          className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl font-bold text-[14px] text-purple-900 bg-white border border-purple-200 hover:bg-purple-50 transition-all cursor-pointer focus-ring"
-        >
-          <Printer size={16} /> Imprimir
-        </button>
-        {onExchange && (
+      <div className="p-3 bg-gray-50 border-t border-gray-100 flex flex-col gap-2">
+        {sale.status === 'pendente' && onAddPayment && (
           <button
-            onClick={() => onExchange(sale)}
-            className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl font-bold text-[14px] text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all cursor-pointer focus-ring"
+            onClick={() => onAddPayment(sale)}
+            className="w-full flex items-center justify-center gap-2 h-11 rounded-xl font-bold text-[14px] text-white bg-orange-600 hover:bg-orange-700 transition-all cursor-pointer focus-ring"
           >
-            <ArrowRightLeft size={16} /> Registrar Troca
+            <Wallet size={16} /> Receber Pagamento
           </button>
         )}
+        <div className="flex gap-2 w-full">
+          <button
+            onClick={() => printSaleInvoice(sale)}
+            className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl font-bold text-[14px] text-purple-900 bg-white border border-purple-200 hover:bg-purple-50 transition-all cursor-pointer focus-ring"
+          >
+            <Printer size={16} /> Imprimir
+          </button>
+          {onExchange && (
+            <button
+              onClick={() => onExchange(sale)}
+              className="flex-1 flex items-center justify-center gap-2 h-11 rounded-xl font-bold text-[14px] text-amber-800 bg-amber-50 border border-amber-200 hover:bg-amber-100 transition-all cursor-pointer focus-ring"
+            >
+              <ArrowRightLeft size={16} /> Registrar Troca
+            </button>
+          )}
+        </div>
       </div>
     </div>
   )
